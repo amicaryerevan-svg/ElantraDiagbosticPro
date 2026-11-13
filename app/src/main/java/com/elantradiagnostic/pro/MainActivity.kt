@@ -18,7 +18,7 @@ class MainActivity : Activity() {
         private const val REQUEST_AUDIO_PERMISSION = 4102
     }
 
-    private val bg = Color.rgb(10, 16, 28)
+    private var bg = Color.rgb(10, 16, 28)
     private val blue = Color.rgb(35, 135, 245)
     private val white = Color.WHITE
 
@@ -61,6 +61,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        bg = getSharedPreferences("elantra_data", MODE_PRIVATE).getInt("theme_bg", Color.rgb(10, 16, 28))
         showHome()
     }
 
@@ -321,7 +322,7 @@ class MainActivity : Activity() {
         android.app.AlertDialog.Builder(this).setTitle("Стиль интерфейса").setItems(themes) { _, which ->
             val color = when (which) { 0 -> Color.rgb(10, 16, 28); 1 -> Color.rgb(5, 5, 8); else -> Color.rgb(18, 8, 30) }
             prefs().edit().putInt("theme_bg", color).apply()
-            showInfo("Стиль выбран", "Настройка сохранена. Полное динамическое оформление будет применено в следующем обновлении интерфейса.")
+            recreate()
         }.show()
     }
 
