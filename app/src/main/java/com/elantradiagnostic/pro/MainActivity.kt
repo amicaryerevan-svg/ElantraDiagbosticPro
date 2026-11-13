@@ -11,7 +11,11 @@ import android.provider.Settings
 import android.view.Gravity
 import android.widget.*
 
-class MainActivity : Activity() {\n\n    companion object {\n        private const val REQUEST_AUDIO_PERMISSION = 4102\n    }
+class MainActivity : Activity() {
+
+    companion object {
+        private const val REQUEST_AUDIO_PERMISSION = 4102
+    }
 
     private val bg = Color.rgb(10, 16, 28)
     private val blue = Color.rgb(35, 135, 245)
@@ -123,7 +127,7 @@ class MainActivity : Activity() {\n\n    companion object {\n        private con
         }
 
         addButton(layout, "ℹ️  О приложении") {
-            showInfo("Elantra Diagnostic Pro", "Версия 2.1\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
+            showInfo("Elantra Diagnostic Pro", "Версия 1.1\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
         }
 
         val footer = TextView(this).apply {
