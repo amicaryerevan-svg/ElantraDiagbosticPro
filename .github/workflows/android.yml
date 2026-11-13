@@ -33,6 +33,20 @@ jobs:
       - name: Build APK
         run: gradle clean :app:assembleDebug
 
+      - name: Check APK signature
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -f "$APK"
+          BT=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -n 1)
+          "$ANDROID_HOME/build-tools/$BT/apksigner" verify --verbose --print-certs "$APK"
+
+      - name: Check APK information
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          BT=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -n 1)
+          "$ANDROID_HOME/build-tools/$BT/aapt" dump badging "$APK" | head -n 20
+          sha256sum "$APK"
+
       - name: Save APK
         uses: actions/upload-artifact@v4
         with:
