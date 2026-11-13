@@ -1,3 +1,4 @@
+
 name: Build Elantra APK
 
 on:
@@ -26,9 +27,11 @@ jobs:
 
       - name: Install Android SDK
         uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-35'
 
       - name: Build APK
-        run: gradle assembleDebug
+        run: gradle clean :app:assembleDebug
 
       - name: Save APK
         uses: actions/upload-artifact@v4
