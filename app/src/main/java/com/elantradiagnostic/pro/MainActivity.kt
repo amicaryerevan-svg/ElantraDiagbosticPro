@@ -107,8 +107,8 @@ class MainActivity : Activity() {
             requestLocalAudioAccess()
         }
 
-        addButton(layout, "▶  Открыть YouTube Music") {
-            openYouTubeMusic()
+        addButton(layout, "▶  Открыть YouTube") {
+            openYouTube()
         }
 
         addButton(layout, "🔵  Подключение Bluetooth (OBD2)") {
@@ -146,22 +146,41 @@ class MainActivity : Activity() {
         setContentView(scroll)
     }
 
-    private fun openYouTubeMusic() {
-        val launchIntent = packageManager.getLaunchIntentForPackage("com.google.android.apps.youtube.music")
-        if (launchIntent != null) {
-            startActivity(launchIntent)
-        } else {
-            showInfo(
-                "YouTube Music",
-                "Официальное приложение YouTube Music не найдено на телефоне. Установи его из Google Play, войди в аккаунт и подключи телефон к Android Auto. В движении используй только аудиорежим и голосовое управление."
+    private fun openYouTube() {
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Обычный YouTube")
+            .setMessage(
+                "Откроется официальное приложение YouTube на телефоне. Используй видео только на парковке. " +
+                    "Обычный Android Auto не передаёт произвольное видео YouTube на штатный экран, " +
+                    "а это приложение не снимает блокировки видеопоказа во время движения."
             )
-            val storeIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=com.google.android.apps.youtube.music"))
-            try {
-                startActivity(storeIntent)
-            } catch (_: Exception) {
-                // No app store or browser available.
+            .setNegativeButton("Отмена", null)
+            .setPositiveButton("Открыть YouTube") { _, _ ->
+                val launchIntent = packageManager.getLaunchIntentForPackage("com.google.android.youtube")
+                if (launchIntent != null) {
+                    try {
+                        startActivity(launchIntent)
+                    } catch (_: Exception) {
+                        showInfo("YouTube", "Не удалось открыть приложение YouTube.")
+                    }
+                } else {
+                    showInfo(
+                        "YouTube не установлен",
+                        "Установи официальное приложение YouTube из Google Play."
+                    )
+                    try {
+                        startActivity(
+                            Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("https://play.google.com/store/apps/details?id=com.google.android.youtube")
+                            )
+                        )
+                    } catch (_: Exception) {
+                        // No app store or browser available.
+                    }
+                }
             }
-        }
+            .show()
     }
 
     private fun requestLocalAudioAccess() {
