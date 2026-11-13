@@ -8,6 +8,10 @@
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
+    <queries>
+        <package android:name="com.google.android.apps.youtube.music" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:label="Elantra Diagnostic Pro"
