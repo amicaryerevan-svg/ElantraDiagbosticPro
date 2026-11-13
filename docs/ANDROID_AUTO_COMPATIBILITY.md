@@ -2,7 +2,7 @@
 
 ## Current repository state
 
-The current app is a native Android `Activity` with a diagnostic-by-symptom menu. It does not yet contain a media browser service, a media session, a Media3 player, or Android for Cars metadata. The current manifest only declares the launcher activity, and the app module has no media or Android for Cars dependencies.
+The app now includes a Media3-backed `MediaLibraryService` and `MediaLibrarySession`, the Android Auto media metadata declaration, foreground media-playback permissions, and a permission flow for local audio access. The service exposes music indexed by Android `MediaStore` to Android Auto.
 
 ## What works with the factory Hyundai screen
 
@@ -16,9 +16,16 @@ The vehicle connection described by the owner is Android Auto over USB. Android 
 4. Video playback on the car display is not a supported Android Auto category. Parked video apps are a separate Android Automotive OS capability on supported vehicles, not a feature that can be enabled on this Hyundai merely because Android Auto works.
 5. While driving, expose only permitted audio controls through Android Auto. Never try to keep video visible to the driver after shifting into Drive.
 
+## Current implementation and limitations
+
+- The app can request access to the phone's local audio library and expose indexed music tracks through Android Auto.
+- The service uses Media3 1.11.1 and ExoPlayer. Android Auto supplies the car-optimized browsing and playback UI.
+- YouTube and YouTube Music streams are not extracted or embedded. Use the official YouTube Music app for its catalog.
+- The implementation has not yet been verified on a physical Hyundai head unit. The CI APK build checks compilation and packaging only.
+
 ## Next implementation milestone
 
-Before adding dependencies, choose a legitimate audio source owned or licensed by this app (for example, user-provided local audio or a permitted stream). Then add a Media3-backed media service, declare its service and automotive metadata in the manifest, and test browsing, play/pause, next/previous, voice search, background playback, and reconnect behavior with the Android Auto Desktop Head Unit and a real vehicle.
+Run the GitHub Actions build, install the APK on an Android phone, grant audio-library permission, and validate browsing and playback in the Android Auto Desktop Head Unit and the Hyundai. Then improve library refresh, paging, search, and playback error reporting.
 
 ## Build
 
