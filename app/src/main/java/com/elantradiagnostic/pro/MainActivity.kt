@@ -2,13 +2,16 @@ package com.elantradiagnostic.pro
 
 import android.app.Activity
 import android.os.Bundle
+import android.os.Build
+import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.content.Intent
 import android.provider.Settings
 import android.view.Gravity
 import android.widget.*
 
-class MainActivity : Activity() {
+class MainActivity : Activity() {\n\n    companion object {\n        private const val REQUEST_AUDIO_PERMISSION = 4102\n    }
 
     private val bg = Color.rgb(10, 16, 28)
     private val blue = Color.rgb(35, 135, 245)
@@ -95,6 +98,10 @@ class MainActivity : Activity() {
 
         addButton(layout, "🩺  Диагностика без OBD2") { showSymptomMenu() }
 
+        addButton(layout, "🎵  Android Auto — музыка телефона") {
+            requestLocalAudioAccess()
+        }
+
         addButton(layout, "🔵  Подключение Bluetooth (OBD2)") {
             showInfo("Подключение OBD2", "Для чтения реальных данных нужен совместимый адаптер ELM327 Bluetooth и поддержка нужных протоколов. Сейчас адаптер не подключён.")
         }
@@ -128,6 +135,45 @@ class MainActivity : Activity() {
         }
         layout.addView(footer)
         setContentView(scroll)
+    }
+
+    private fun requestLocalAudioAccess() {
+        val permission = if (Build.VERSION.SDK_INT >= 33) {
+            Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+
+        if (checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) {
+            showInfo(
+                "Android Auto — музыка",
+                "Доступ к аудиофайлам уже разрешён. Подключи телефон к Android Auto и открой Elantra Diagnostic Pro в списке медиаприложений. В библиотеке появятся поддерживаемые музыкальные файлы, сохранённые на телефоне."
+            )
+        } else {
+            requestPermissions(arrayOf(permission), REQUEST_AUDIO_PERMISSION)
+        }
+    }
+
+    @Deprecated("Permission callback retained for compatibility with the current Activity implementation")
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_AUDIO_PERMISSION) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                showInfo(
+                    "Доступ разрешён",
+                    "Теперь подключи телефон к Android Auto. Открой список медиаприложений и выбери Elantra Diagnostic Pro. Если музыка не появилась, проверь, что на телефоне есть локальные аудиофайлы."
+                )
+            } else {
+                showInfo(
+                    "Нужен доступ к музыке",
+                    "Без разрешения Android не позволит приложению показать локальные аудиофайлы в Android Auto. Разрешение можно включить в настройках приложения."
+                )
+            }
+        }
     }
 
     private fun showSymptomMenu() {
