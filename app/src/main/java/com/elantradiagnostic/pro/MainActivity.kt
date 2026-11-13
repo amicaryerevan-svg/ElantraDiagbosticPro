@@ -7,6 +7,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.content.Intent
+import android.net.Uri
 import android.provider.Settings
 import android.view.Gravity
 import android.widget.*
@@ -102,8 +103,12 @@ class MainActivity : Activity() {
 
         addButton(layout, "🩺  Диагностика без OBD2") { showSymptomMenu() }
 
-        addButton(layout, "🎵  Android Auto — музыка телефона") {
+        addButton(layout, "🎵  Музыка телефона — Android Auto") {
             requestLocalAudioAccess()
+        }
+
+        addButton(layout, "▶  Открыть YouTube Music") {
+            openYouTubeMusic()
         }
 
         addButton(layout, "🔵  Подключение Bluetooth (OBD2)") {
@@ -139,6 +144,24 @@ class MainActivity : Activity() {
         }
         layout.addView(footer)
         setContentView(scroll)
+    }
+
+    private fun openYouTubeMusic() {
+        val launchIntent = packageManager.getLaunchIntentForPackage("com.google.android.apps.youtube.music")
+        if (launchIntent != null) {
+            startActivity(launchIntent)
+        } else {
+            showInfo(
+                "YouTube Music",
+                "Официальное приложение YouTube Music не найдено на телефоне. Установи его из Google Play, войди в аккаунт и подключи телефон к Android Auto. В движении используй только аудиорежим и голосовое управление."
+            )
+            val storeIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=com.google.android.apps.youtube.music"))
+            try {
+                startActivity(storeIntent)
+            } catch (_: Exception) {
+                // No app store or browser available.
+            }
+        }
     }
 
     private fun requestLocalAudioAccess() {
