@@ -9,7 +9,7 @@
         android:maxSdkVersion="32" />
 
     <queries>
-        <package android:name="com.google.android.apps.youtube.music" />
+        <package android:name="com.google.android.youtube" />
     </queries>
 
     <application
