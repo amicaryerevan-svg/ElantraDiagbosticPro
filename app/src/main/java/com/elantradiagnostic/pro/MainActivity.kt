@@ -18,7 +18,7 @@ class MainActivity : Activity() {
         private const val REQUEST_AUDIO_PERMISSION = 4102
     }
 
-    private val bg = Color.rgb(10, 16, 28)
+    private var bg = Color.rgb(10, 16, 28)
     private val blue = Color.rgb(35, 135, 245)
     private val white = Color.WHITE
 
@@ -61,6 +61,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        bg = getSharedPreferences("elantra_data", MODE_PRIVATE).getInt("theme_bg", Color.rgb(10, 16, 28))
         showHome()
     }
 
@@ -131,6 +132,17 @@ class MainActivity : Activity() {
             showInfo("История", "История пока не сохраняется. Результаты этой версии диагностики можно записать вручную.")
         }
 
+        addButton(layout, "🚘  GPS-панель и скорость") { showGpsPanel() }
+        addButton(layout, "🅿️  Сохранить место парковки") { saveParkingLocation() }
+        addButton(layout, "🧭  Найти автомобиль") { findParkedCar() }
+        addButton(layout, "🛠️  Обслуживание и ТО") { showMaintenance() }
+        addButton(layout, "⛽  Журнал заправок и расход") { showFuelLog() }
+        addButton(layout, "🎬  Открыть видео на телефоне") { openLocalVideo() }
+        addButton(layout, "📡  Bluetooth и Wi-Fi") { showConnectionStatus() }
+        addButton(layout, "🎙️  Голосовой помощник") { startVoiceAssistant() }
+        addButton(layout, "📝  Журнал заметок и поездок") { showTripNotes() }
+        addButton(layout, "🎨  Оформление Sport / Neon") { showThemePicker() }
+
         addButton(layout, "ℹ️  О приложении") {
             showInfo("Elantra Diagnostic Pro", "Версия 1.2\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
         }
@@ -181,6 +193,151 @@ class MainActivity : Activity() {
                 }
             }
             .show()
+    }
+
+
+    private fun prefs() = getSharedPreferences("elantra_data", MODE_PRIVATE)
+
+    private fun hasLocationPermission(): Boolean =
+        checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    private fun requestLocationFeature() {
+        requestPermissions(
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
+            4103
+        )
+    }
+
+    private fun latestPhoneLocation(): android.location.Location? {
+        if (!hasLocationPermission()) return null
+        val manager = getSystemService(LOCATION_SERVICE) as android.location.LocationManager
+        val gps = try { manager.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER) } catch (_: Exception) { null }
+        val network = try { manager.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER) } catch (_: Exception) { null }
+        return listOfNotNull(gps, network).maxByOrNull { it.time }
+    }
+
+    private fun saveParkingLocation() {
+        if (!hasLocationPermission()) { requestLocationFeature(); return }
+        val loc = latestPhoneLocation()
+        if (loc == null) {
+            showInfo("Парковка", "Не удалось получить координаты. Включи геолокацию и попробуй на открытом месте.")
+            return
+        }
+        prefs().edit().putString("parking_lat", loc.latitude.toString())
+            .putString("parking_lon", loc.longitude.toString())
+            .putLong("parking_time", System.currentTimeMillis()).apply()
+        showInfo("Место сохранено", "Координаты парковки сохранены на телефоне. Точность зависит от GPS: ±${loc.accuracy.toInt()} м.")
+    }
+
+    private fun findParkedCar() {
+        val lat = prefs().getString("parking_lat", null)
+        val lon = prefs().getString("parking_lon", null)
+        if (lat == null || lon == null) { showInfo("Парковка", "Сначала сохрани место парковки."); return }
+        val uri = Uri.parse("geo:$lat,$lon?q=$lat,$lon(Моя Elantra)")
+        try { startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+        catch (_: Exception) { showInfo("Карты", "На телефоне нет приложения для открытия карты.") }
+    }
+
+    private fun showGpsPanel() {
+        if (!hasLocationPermission()) { requestLocationFeature(); return }
+        val loc = latestPhoneLocation()
+        if (loc == null) { showInfo("GPS-панель", "Нет координат. Включи геолокацию и попробуй на открытом месте."); return }
+        val speed = if (loc.hasSpeed()) String.format("%.0f км/ч", loc.speed * 3.6f) else "Нет данных о скорости"
+        showInfo("GPS-панель телефона",
+            "Скорость по GPS: $speed\nТочность: ±${loc.accuracy.toInt()} м\nВысота: ${"%.0f".format(loc.altitude)} м\nКоординаты: ${loc.latitude}, ${loc.longitude}\n\nЭто показания телефона, а не ЭБУ и не штатный спидометр. Не смотри на экран во время движения.")
+    }
+
+    private fun showMaintenance() {
+        val current = EditText(this).apply { hint = "Текущий пробег, км"; inputType = 2; setText(prefs().getString("odo", "")) }
+        val oilDue = EditText(this).apply { hint = "Пробег следующей замены масла, км"; inputType = 2; setText(prefs().getString("oil_due", "")) }
+        val other = EditText(this).apply { hint = "Следующее ТО / заметка"; setText(prefs().getString("service_note", "")) }
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(36, 8, 36, 0); addView(current); addView(oilDue); addView(other) }
+        android.app.AlertDialog.Builder(this).setTitle("Обслуживание Hyundai").setMessage("Данные вводятся вручную и хранятся на телефоне.")
+            .setView(box).setNegativeButton("Отмена", null).setPositiveButton("Сохранить") { _, _ ->
+                prefs().edit().putString("odo", current.text.toString()).putString("oil_due", oilDue.text.toString()).putString("service_note", other.text.toString()).apply()
+                val now = current.text.toString().toLongOrNull(); val due = oilDue.text.toString().toLongOrNull()
+                val result = if (now != null && due != null) { val left = due - now; if (left >= 0) "До замены масла: $left км" else "Замена просрочена на ${-left} км" } else "Данные сохранены."
+                showInfo("Напоминание", result + if (other.text.isNotBlank()) "\n${other.text}" else "")
+            }.show()
+    }
+
+    private fun showFuelLog() {
+        val liters = EditText(this).apply { hint = "Заправлено литров"; inputType = 8194 }
+        val km = EditText(this).apply { hint = "Пробег с прошлой заправки, км"; inputType = 8194 }
+        val cost = EditText(this).apply { hint = "Стоимость заправки (необязательно)"; inputType = 8194 }
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(36, 8, 36, 0); addView(liters); addView(km); addView(cost) }
+        android.app.AlertDialog.Builder(this).setTitle("Расход топлива").setMessage("Для точного расчёта заправляйся до полного бака и вводи пройденный пробег.")
+            .setView(box).setNegativeButton("Отмена", null).setPositiveButton("Рассчитать") { _, _ ->
+                val l = liters.text.toString().replace(",", ".").toDoubleOrNull()
+                val d = km.text.toString().replace(",", ".").toDoubleOrNull()
+                val p = cost.text.toString().replace(",", ".").toDoubleOrNull()
+                if (l != null && d != null && l > 0 && d > 0) {
+                    val avg = l * 100 / d
+                    prefs().edit().putString("fuel_avg", "%.2f".format(avg)).putString("fuel_cost", p?.toString() ?: "").apply()
+                    showInfo("Результат", "Средний расход: %.2f л/100 км".format(avg) + if (p != null) "\nСтоимость заправки: %.2f".format(p) else "")
+                } else showInfo("Проверь данные", "Укажи положительное количество литров и километров.")
+            }.show()
+    }
+
+    private fun openLocalVideo() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = "video/*" }
+        try { startActivityForResult(intent, 4105) } catch (_: Exception) { showInfo("Видео", "Не удалось открыть выбор видео.") }
+    }
+
+    private fun showConnectionStatus() {
+        val wifi = try {
+            val manager = applicationContext.getSystemService(WIFI_SERVICE) as android.net.wifi.WifiManager
+            if (manager.isWifiEnabled) "включён" else "выключен"
+        } catch (_: Exception) { "статус недоступен" }
+        val bt = try {
+            val adapter = android.bluetooth.BluetoothAdapter.getDefaultAdapter()
+            if (adapter == null) "не поддерживается" else if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission("android.permission.BLUETOOTH_CONNECT") != PackageManager.PERMISSION_GRANTED) "неизвестен (нет разрешения)" else if (adapter.isEnabled) "включён" else "выключен"
+        } catch (_: Exception) { "статус недоступен" }
+        showInfo("Связь телефона", "Bluetooth: $bt\nWi-Fi: $wifi\n\nПоказывается состояние модулей телефона. Это не означает, что телефон подключён к ЭБУ автомобиля. Android Auto использует поддерживаемое автомобилем соединение.")
+    }
+
+    private fun startVoiceAssistant() {
+        try {
+            val intent = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "ru-RU")
+                putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Произнеси команду")
+            }
+            startActivityForResult(intent, 4104)
+        } catch (_: Exception) { showInfo("Голосовой помощник", "На телефоне нет доступного сервиса распознавания речи.") }
+    }
+
+    private fun showTripNotes() {
+        val edit = EditText(this).apply { hint = "Например: поездка, пробег, ремонт, заметка"; minLines = 3; setText(prefs().getString("trip_notes", "")) }
+        android.app.AlertDialog.Builder(this).setTitle("Заметки и история").setView(edit)
+            .setNegativeButton("Отмена", null).setPositiveButton("Сохранить") { _, _ ->
+                prefs().edit().putString("trip_notes", edit.text.toString()).apply()
+                showInfo("Сохранено", "Заметка сохранена локально на телефоне.")
+            }.show()
+    }
+
+    private fun showThemePicker() {
+        val themes = arrayOf("Sport Blue", "Dark", "Neon")
+        android.app.AlertDialog.Builder(this).setTitle("Стиль интерфейса").setItems(themes) { _, which ->
+            val color = when (which) { 0 -> Color.rgb(10, 16, 28); 1 -> Color.rgb(5, 5, 8); else -> Color.rgb(18, 8, 30) }
+            prefs().edit().putInt("theme_bg", color).apply()
+            recreate()
+        }.show()
+    }
+
+    @Deprecated("Activity result used for document picker and speech recognition")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (resultCode != RESULT_OK || data == null) return
+        if (requestCode == 4105) {
+            val uri = data.data ?: return
+            try { startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "video/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }
+            catch (_: Exception) { showInfo("Видео", "На телефоне нет приложения для воспроизведения этого видео.") }
+        } else if (requestCode == 4104) {
+            val words = data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+            if (!words.isNullOrBlank()) showInfo("Распознано", words)
+        }
     }
 
     private fun requestLocalAudioAccess() {
