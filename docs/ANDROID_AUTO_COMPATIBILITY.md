@@ -19,6 +19,7 @@ The vehicle connection described by the owner is Android Auto over USB. Android 
 ## Current implementation and limitations
 
 - The app can request access to the phone's local audio library and expose indexed music tracks through Android Auto.
+- MediaStore access is defensive: revoked permissions and runtime provider failures return an empty library and are logged instead of crashing the media service; browse paging values are clamped to safe non-negative ranges.
 - The phone app includes a shortcut to launch the official YouTube Music app when installed. This does not embed YouTube or add YouTube video playback to the factory display.
 - The service uses Media3 1.5.1 and ExoPlayer. Android Auto supplies the car-optimized browsing and playback UI.
 - YouTube and YouTube Music streams are not extracted or embedded. Use the official YouTube Music app for its catalog.
