@@ -5,6 +5,7 @@ import android.content.ContentUris
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import android.os.Bundle
 import android.provider.MediaStore
 import androidx.media3.common.MediaItem
@@ -62,8 +63,11 @@ class ElantraMediaService : MediaLibraryService() {
             }
 
             val tracks = queryLocalAudio()
-            val start = (page * pageSize).coerceAtMost(tracks.size)
-            val end = (start + pageSize).coerceAtMost(tracks.size)
+            // Be defensive about invalid or unusually large paging values from a browser.
+            val safePage = page.coerceAtLeast(0).toLong()
+            val safePageSize = pageSize.coerceAtLeast(0).toLong()
+            val start = (safePage * safePageSize).coerceAtMost(tracks.size.toLong()).toInt()
+            val end = (start.toLong() + safePageSize).coerceAtMost(tracks.size.toLong()).toInt()
             val pageItems = ImmutableList.copyOf(tracks.subList(start, end))
             return Futures.immediateFuture(LibraryResult.ofItemList(pageItems, params))
         }
@@ -113,59 +117,70 @@ class ElantraMediaService : MediaLibraryService() {
     private fun queryLocalAudio(): List<MediaItem> {
         if (!hasAudioPermission()) return emptyList()
 
-        val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
-        } else {
-            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-        }
-        val projection = arrayOf(
-            MediaStore.Audio.Media._ID,
-            MediaStore.Audio.Media.TITLE,
-            MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.MIME_TYPE
-        )
-        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
-        val result = mutableListOf<MediaItem>()
-
-        contentResolver.query(
-            collection,
-            projection,
-            selection,
-            null,
-            "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
-        )?.use { cursor ->
-            val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-            val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-            val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-            val mimeColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
-
-            while (cursor.moveToNext()) {
-                val id = cursor.getLong(idColumn)
-                val title = cursor.getString(titleColumn) ?: "Без названия"
-                val artist = cursor.getString(artistColumn) ?: "Неизвестный исполнитель"
-                val mimeType = cursor.getString(mimeColumn)
-                val uri: Uri = ContentUris.withAppendedId(collection, id)
-
-                val metadata = MediaMetadata.Builder()
-                    .setTitle(title)
-                    .setArtist(artist)
-                    .setIsBrowsable(false)
-                    .setIsPlayable(true)
-                    .build()
-
-                val builder = MediaItem.Builder()
-                    .setMediaId(uri.toString())
-                    .setUri(uri)
-                    .setMediaMetadata(metadata)
-
-                if (!mimeType.isNullOrBlank()) builder.setMimeType(mimeType)
-                result += builder.build()
+        return try {
+            val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+            } else {
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
             }
+            val projection = arrayOf(
+                MediaStore.Audio.Media._ID,
+                MediaStore.Audio.Media.TITLE,
+                MediaStore.Audio.Media.ARTIST,
+                MediaStore.Audio.Media.MIME_TYPE
+            )
+            val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+            val result = mutableListOf<MediaItem>()
+
+            contentResolver.query(
+                collection,
+                projection,
+                selection,
+                null,
+                "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
+            )?.use { cursor ->
+                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+                val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+                val mimeColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
+
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idColumn)
+                    val title = cursor.getString(titleColumn) ?: "Без названия"
+                    val artist = cursor.getString(artistColumn) ?: "Неизвестный исполнитель"
+                    val mimeType = cursor.getString(mimeColumn)
+                    val uri: Uri = ContentUris.withAppendedId(collection, id)
+
+                    val metadata = MediaMetadata.Builder()
+                        .setTitle(title)
+                        .setArtist(artist)
+                        .setIsBrowsable(false)
+                        .setIsPlayable(true)
+                        .build()
+
+                    val builder = MediaItem.Builder()
+                        .setMediaId(uri.toString())
+                        .setUri(uri)
+                        .setMediaMetadata(metadata)
+
+                    if (!mimeType.isNullOrBlank()) builder.setMimeType(mimeType)
+                    result += builder.build()
+                }
+            }
+            result
+        } catch (error: SecurityException) {
+            // Permission can be revoked after the initial check, while Android Auto is browsing.
+            Log.w(TAG, "Audio permission is unavailable while reading MediaStore", error)
+            emptyList()
+        } catch (error: RuntimeException) {
+            // A transient MediaStore/provider failure must not crash the car media service.
+            Log.w(TAG, "Unable to read the local audio library", error)
+            emptyList()
         }
-        return result
     }
 
     companion object {
+        private const val TAG = "ElantraMediaService"
         private const val ROOT_ID = "elantra_local_music"
     }
 }
