@@ -16,11 +16,13 @@ class MainActivity : Activity() {
 
     companion object {
         private const val REQUEST_AUDIO_PERMISSION = 4102
+        private const val REQUEST_OBD2_PERMISSION = 4106
     }
 
     private var bg = Color.rgb(10, 16, 28)
     private val blue = Color.rgb(35, 135, 245)
     private val white = Color.WHITE
+    private var obd2Client: Obd2BluetoothClient? = null
 
     private data class Symptom(val title: String, val causes: String, val checks: String, val urgency: String)
 
@@ -63,6 +65,12 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         bg = getSharedPreferences("elantra_data", MODE_PRIVATE).getInt("theme_bg", Color.rgb(10, 16, 28))
         showHome()
+    }
+
+    override fun onDestroy() {
+        obd2Client?.close()
+        obd2Client = null
+        super.onDestroy()
     }
 
     private fun showHome() {
@@ -112,8 +120,8 @@ class MainActivity : Activity() {
             openYouTube()
         }
 
-        addButton(layout, "🔵  Подключение Bluetooth (OBD2)") {
-            showInfo("Подключение OBD2", "Для чтения реальных данных нужен совместимый адаптер ELM327 Bluetooth и поддержка нужных протоколов. Сейчас адаптер не подключён.")
+        addButton(layout, "🔌  Подключить ELM327 Bluetooth") {
+            startObd2Bluetooth()
         }
 
         addButton(layout, "📶  Подключение Wi-Fi") {
@@ -144,7 +152,7 @@ class MainActivity : Activity() {
         addButton(layout, "🎨  Оформление Sport / Neon") { showThemePicker() }
 
         addButton(layout, "ℹ️  О приложении") {
-            showInfo("Elantra Diagnostic Pro", "Версия 1.3\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
+            showInfo("Elantra Diagnostic Pro", "Версия 1.4\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
         }
 
         val footer = TextView(this).apply {
@@ -285,6 +293,161 @@ class MainActivity : Activity() {
         try { startActivityForResult(intent, 4105) } catch (_: Exception) { showInfo("Видео", "Не удалось открыть выбор видео.") }
     }
 
+    private fun startObd2Bluetooth() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(
+                arrayOf(Manifest.permission.BLUETOOTH_CONNECT),
+                REQUEST_OBD2_PERMISSION
+            )
+            return
+        }
+        showPairedObd2Devices()
+    }
+
+    private fun showPairedObd2Devices() {
+        val adapter = try {
+            android.bluetooth.BluetoothAdapter.getDefaultAdapter()
+        } catch (_: SecurityException) {
+            null
+        }
+
+        if (adapter == null) {
+            showInfo("Bluetooth недоступен", "Телефон не поддерживает Bluetooth.")
+            return
+        }
+
+        if (!adapter.isEnabled) {
+            android.app.AlertDialog.Builder(this)
+                .setTitle("Включи Bluetooth")
+                .setMessage("Для подключения ELM327 включи Bluetooth в настройках телефона.")
+                .setNegativeButton("Отмена", null)
+                .setPositiveButton("Настройки Bluetooth") { _, _ ->
+                    try {
+                        startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+                    } catch (_: Exception) {
+                        showInfo("Bluetooth", "Не удалось открыть настройки Bluetooth.")
+                    }
+                }
+                .show()
+            return
+        }
+
+        val devices = try {
+            adapter.bondedDevices.toList().sortedBy { it.name ?: it.address }
+        } catch (_: SecurityException) {
+            showInfo("Нет разрешения", "Разреши приложению доступ к Bluetooth-устройствам поблизости.")
+            return
+        }
+
+        if (devices.isEmpty()) {
+            android.app.AlertDialog.Builder(this)
+                .setTitle("Нет сопряжённых устройств")
+                .setMessage(
+                    "Сначала подключи ELM327 в настройках Android: Bluetooth → Добавить устройство. " +
+                        "Для многих адаптеров PIN — 1234 или 0000. Затем вернись сюда."
+                )
+                .setNegativeButton("Назад", null)
+                .setPositiveButton("Настройки Bluetooth") { _, _ ->
+                    try {
+                        startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+                    } catch (_: Exception) {
+                        showInfo("Bluetooth", "Не удалось открыть настройки Bluetooth.")
+                    }
+                }
+                .show()
+            return
+        }
+
+        val labels = devices.map { device ->
+            "${device.name ?: "Bluetooth устройство"}\n${device.address}"
+        }.toTypedArray()
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Выбери сопряжённый OBD2 адаптер")
+            .setItems(labels) { _, which -> connectObd2Device(devices[which]) }
+            .setNegativeButton("Отмена", null)
+            .show()
+    }
+
+    private fun connectObd2Device(device: android.bluetooth.BluetoothDevice) {
+        obd2Client?.close()
+        val client = Obd2BluetoothClient()
+        obd2Client = client
+        val deviceName = try {
+            device.name?.takeIf { it.isNotBlank() } ?: device.address
+        } catch (_: SecurityException) {
+            "OBD2 адаптер"
+        }
+
+        val progress = android.app.AlertDialog.Builder(this)
+            .setTitle("Подключение к OBD2")
+            .setMessage("Подключаюсь к $deviceName и проверяю связь с ЭБУ. Это может занять несколько секунд.")
+            .setNegativeButton("Отмена", null)
+            .create()
+
+        progress.setOnCancelListener {
+            if (obd2Client === client) {
+                client.close()
+                obd2Client = null
+            }
+        }
+        progress.setOnShowListener {
+            progress.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).setOnClickListener {
+                progress.dismiss()
+                client.close()
+                if (obd2Client === client) obd2Client = null
+            }
+        }
+        progress.show()
+
+        client.connect(device, object : Obd2BluetoothClient.Listener {
+            override fun onConnected(deviceName: String, adapterInfo: String, ecuResponse: String) {
+                runOnUiThread {
+                    if (isFinishing || isDestroyed || obd2Client !== client) return@runOnUiThread
+                    if (progress.isShowing) progress.dismiss()
+
+                    val normalized = ecuResponse.replace(Regex("\\s+"), "")
+                    val ecuResponded = normalized.contains("4100", ignoreCase = true)
+                    val message = if (ecuResponded) {
+                        "Bluetooth SPP подключён. Адаптер: $deviceName\n\n" +
+                            "Ответ ELM327: $adapterInfo\n\n" +
+                            "ЭБУ ответил на запрос поддерживаемых параметров (0100):\n$ecuResponse\n\n" +
+                            "Это подтверждает связь с ЭБУ. Пока отображается только проверочный ответ."
+                    } else {
+                        "Bluetooth SPP подключён к $deviceName, но корректный ответ ЭБУ на PID 0100 не подтверждён.\n\n" +
+                            "Ответ адаптера: $ecuResponse\n\n" +
+                            "Проверь совместимость ELM327, положение ключа ON и подключение адаптера. " +
+                            "Не запускай двигатель только ради этой проверки."
+                    }
+
+                    android.app.AlertDialog.Builder(this@MainActivity)
+                        .setTitle(if (ecuResponded) "Связь с ЭБУ подтверждена" else "Адаптер подключён")
+                        .setMessage(message)
+                        .setNeutralButton("Отключить") { _, _ ->
+                            client.close()
+                            if (obd2Client === client) obd2Client = null
+                        }
+                        .setPositiveButton("Готово", null)
+                        .show()
+                }
+            }
+
+            override fun onFailure(message: String) {
+                runOnUiThread {
+                    if (isFinishing || isDestroyed || obd2Client !== client) return@runOnUiThread
+                    if (progress.isShowing) progress.dismiss()
+                    obd2Client = null
+                    showInfo(
+                        "Не удалось подключить OBD2",
+                        "$message\n\nУбедись, что адаптер сопряжён с телефоном, не занят другим приложением и поддерживает Bluetooth Classic SPP."
+                    )
+                }
+            }
+        })
+    }
+
     private fun showConnectionStatus() {
         val wifi = try {
             val manager = applicationContext.getSystemService(WIFI_SERVICE) as android.net.wifi.WifiManager
@@ -374,6 +537,15 @@ class MainActivity : Activity() {
                 showInfo(
                     "Нужен доступ к музыке",
                     "Без разрешения Android не позволит приложению показать локальные аудиофайлы в Android Auto. Разрешение можно включить в настройках приложения."
+                )
+            }
+        } else if (requestCode == REQUEST_OBD2_PERMISSION) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                showPairedObd2Devices()
+            } else {
+                showInfo(
+                    "Bluetooth-разрешение не выдано",
+                    "Для связи с уже сопряжённым ELM327 нужно разрешение «Устройства поблизости» (Bluetooth Connect). Без него приложение не может подключиться к адаптеру."
                 )
             }
         }
