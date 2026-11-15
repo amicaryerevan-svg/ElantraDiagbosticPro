@@ -21,13 +21,14 @@ The vehicle connection described by the owner is Android Auto over USB. Android 
 - The app can request access to the phone's local audio library and expose indexed music tracks through Android Auto.
 - MediaStore access is defensive: revoked permissions and runtime provider failures return an empty library and are logged instead of crashing the media service; browse paging values are clamped to safe non-negative ranges.
 - The phone app includes a shortcut to launch the official YouTube Music app when installed. This does not embed YouTube or add YouTube video playback to the factory display.
+- Version 1.4 adds a read-only Bluetooth Classic SPP connection check for already-paired ELM327 adapters. It requests only `BLUETOOTH_CONNECT` on Android 12+ and does not scan for nearby devices. See [OBD2 Bluetooth setup](OBD2_BLUETOOTH.md).
 - The service uses Media3 1.5.1 and ExoPlayer. Android Auto supplies the car-optimized browsing and playback UI.
 - YouTube and YouTube Music streams are not extracted or embedded. Use the official YouTube Music app for its catalog.
 - The implementation has not yet been verified on a physical Hyundai head unit. The CI APK build checks compilation and packaging only.
 
 ## Next implementation milestone
 
-Run the GitHub Actions build, install the APK on an Android phone, grant audio-library permission, and validate browsing and playback in the Android Auto Desktop Head Unit and the Hyundai. Then improve library refresh, paging, search, and playback error reporting.
+Test version 1.4 with a physical Bluetooth Classic SPP ELM327 adapter in the Elantra, then add a read-only PID decoder (starting with engine RPM `010C` and coolant temperature `0105`) and DTC reading only after the adapter handshake is confirmed. Separately, validate media browsing and playback in the Android Auto Desktop Head Unit and the Hyundai.
 
 ## Build
 
