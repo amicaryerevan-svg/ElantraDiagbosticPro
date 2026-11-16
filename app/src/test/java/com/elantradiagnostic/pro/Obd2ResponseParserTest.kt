@@ -15,7 +15,7 @@ class Obd2ResponseParserTest {
         assertTrue(5 in supported)
         assertTrue(12 in supported)
         assertFalse(2 in supported)
-        assertTrue(Obd2ResponseParser.describeSupportedPids(supported).contains("010C: поддерживается"))
+        assertTrue(Obd2ResponseParser.describeSupportedPids(supported).contains("Обороты двигателя (010C): поддерживается"))
     }
 
     @Test
