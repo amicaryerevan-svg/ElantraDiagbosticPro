@@ -30,8 +30,8 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-35'
 
-      - name: Build APK
-        run: gradle clean :app:assembleDebug
+      - name: Run unit tests and build APK
+        run: gradle clean :app:testDebugUnitTest :app:assembleDebug
 
       - name: Check APK signature
         run: |

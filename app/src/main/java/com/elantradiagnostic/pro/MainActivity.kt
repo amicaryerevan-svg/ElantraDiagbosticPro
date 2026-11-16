@@ -129,11 +129,11 @@ class MainActivity : Activity() {
         }
 
         addButton(layout, "⚙️  Ошибки двигателя") {
-            showInfo("Ошибки двигателя", "В версии 1.4 добавлена проверка связи с ЭБУ через ELM327, но чтение кодов DTC ещё не реализовано. Диагностика по симптомам не заменяет сканирование автомобиля.")
+            showInfo("Ошибки двигателя", "В версии 1.5 добавлена расшифровка карты поддерживаемых PID из ответа ЭБУ. Чтение кодов DTC ещё не реализовано. Диагностика по симптомам не заменяет сканирование автомобиля.")
         }
 
         addButton(layout, "📊  Датчики двигателя") {
-            showInfo("Датчики двигателя", "Версия 1.4 проверяет только ответ ЭБУ на запрос поддерживаемых параметров (PID 0100). Показания оборотов, температуры и скорости ещё не декодируются.")
+            showInfo("Датчики двигателя", "Версия 1.5 расшифровывает карту поддерживаемых PID 01–20 из ответа 0100. Это список возможностей ЭБУ, а не текущие показания: запросы RPM, температуры и скорости ещё не выполняются.")
         }
 
         addButton(layout, "📋  История диагностики") {
@@ -152,7 +152,7 @@ class MainActivity : Activity() {
         addButton(layout, "🎨  Оформление Sport / Neon") { showThemePicker() }
 
         addButton(layout, "ℹ️  О приложении") {
-            showInfo("Elantra Diagnostic Pro", "Версия 1.4\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
+            showInfo("Elantra Diagnostic Pro", "Версия 1.5\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
         }
 
         val footer = TextView(this).apply {
@@ -408,13 +408,14 @@ class MainActivity : Activity() {
                     if (isFinishing || isDestroyed || obd2Client !== client) return@runOnUiThread
                     if (progress.isShowing) progress.dismiss()
 
-                    val normalized = ecuResponse.replace(Regex("\\s+"), "")
-                    val ecuResponded = normalized.contains("4100", ignoreCase = true)
-                    val message = if (ecuResponded) {
+                    val supportedPids = Obd2ResponseParser.supportedPids(ecuResponse)
+                    val ecuResponded = supportedPids != null
+                    val message = if (supportedPids != null) {
                         "Bluetooth SPP подключён. Адаптер: $deviceName\n\n" +
                             "Ответ ELM327: $adapterInfo\n\n" +
                             "ЭБУ ответил на запрос поддерживаемых параметров (0100):\n$ecuResponse\n\n" +
-                            "Это подтверждает связь с ЭБУ. Пока отображается только проверочный ответ."
+                            "Расшифровка карты PID:\n${Obd2ResponseParser.describeSupportedPids(supportedPids)}\n\n" +
+                            "Это список возможностей ЭБУ, а не текущие значения датчиков."
                     } else {
                         "Bluetooth SPP подключён к $deviceName, но корректный ответ ЭБУ на PID 0100 не подтверждён.\n\n" +
                             "Ответ адаптера: $ecuResponse\n\n" +

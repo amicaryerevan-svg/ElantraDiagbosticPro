@@ -2,7 +2,7 @@
 
 ## Supported adapter type
 
-Version 1.4 adds an initial read-only connection test for an already-paired **Bluetooth Classic RFCOMM SPP** ELM327-compatible adapter.
+Version 1.5 adds an initial read-only connection test for an already-paired **Bluetooth Classic RFCOMM SPP** ELM327-compatible adapter.
 
 It does not support BLE-only adapters or Wi-Fi OBD-II adapters yet. Some inexpensive ELM327 clones advertise compatibility but do not implement the standard SPP service reliably.
 
@@ -26,7 +26,9 @@ After opening the standard Bluetooth Classic SPP connection, the app sends the E
 - `ATSP0` — request automatic OBD protocol selection
 - `0100` — read the standard PID 00 supported-PID bitmap from the ECU
 
-A response containing `41 00` (or the compact equivalent `4100`) indicates that the ECU answered the supported-PID query. A Bluetooth connection without that response means the phone reached the adapter, but ECU communication has not yet been confirmed.
+A response containing `41 00` (or the compact equivalent `4100`) indicates that the ECU answered the supported-PID query. Version 1.5 also decodes the four-byte PID support bitmap that follows this header and lists which standard PIDs 01–20 the ECU reports as supported. In particular, it highlights PID 05 (coolant temperature) and PID 0C (engine RPM).
+
+This bitmap describes ECU capabilities only. The app does not yet request or display live RPM, coolant temperature, vehicle speed, or DTC values. A Bluetooth connection without a valid `41 00` bitmap means the phone reached the adapter, but ECU communication has not been confirmed.
 
 No trouble codes are cleared, no actuator tests are run, and no vehicle-control commands are sent.
 
@@ -46,6 +48,6 @@ No trouble codes are cleared, no actuator tests are run, and no vehicle-control 
 
 ## Known limitations and next step
 
-The current implementation verifies the SPP link and performs only the `0100` supported-PID query. It does **not** yet decode live values such as RPM, coolant temperature, vehicle speed, or diagnostic trouble codes. Those require a separate, tested read-only PID/DTC layer.
+The current implementation verifies the SPP link, performs the read-only `0100` supported-PID query, and decodes the PID 01–20 support bitmap. It does **not** yet request live values such as RPM (`010C`), coolant temperature (`0105`), vehicle speed (`010D`), or diagnostic trouble codes (Mode 03). The next step is a separately tested read-only request/response layer for supported PIDs and DTCs.
 
 CI can verify compilation and APK packaging, but only a physical ELM327 adapter and the Elantra can confirm the Bluetooth and ECU handshake end to end.

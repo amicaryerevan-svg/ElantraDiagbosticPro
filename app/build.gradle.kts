@@ -12,8 +12,8 @@ android {
         applicationId = "com.elantradiagnostic.pro"
         minSdk = 23
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.4"
+        versionCode = 6
+        versionName = "1.5"
     }
 
     compileOptions {
@@ -30,4 +30,6 @@ dependencies {
     // Media3 powers the Android Auto media browser and playback session.
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-session:1.5.1")
+
+    testImplementation("junit:junit:4.13.2")
 }
