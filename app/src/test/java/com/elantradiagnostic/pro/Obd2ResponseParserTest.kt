@@ -2,7 +2,6 @@ package com.elantradiagnostic.pro
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -11,10 +10,9 @@ class Obd2ResponseParserTest {
 
     @Test
     fun parsesCompactPidBitmapAndHighlightsUsefulPids() {
-        val supported = Obd2ResponseParser.supportedPids("4100BE3EA813")
+        val supported = requireNotNull(Obd2ResponseParser.supportedPids("4100BE3EA813"))
 
-        assertNotNull(supported)
-        assertTrue(5 in supported!!)
+        assertTrue(5 in supported)
         assertTrue(12 in supported)
         assertFalse(2 in supported)
         assertTrue(Obd2ResponseParser.describeSupportedPids(supported).contains("010C: поддерживается"))
