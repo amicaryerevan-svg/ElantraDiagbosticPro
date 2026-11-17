@@ -20,7 +20,7 @@ import java.util.concurrent.Executors
 internal class Obd2BluetoothClient : AutoCloseable {
 
     interface Listener {
-        fun onConnected(deviceName: String, adapterInfo: String, ecuResponse: String)
+        fun onConnected(deviceName: String, adapterInfo: String, ecuResponse: String, livePidResponses: Map<Int, String>)
         fun onFailure(message: String)
     }
 
@@ -51,13 +51,32 @@ internal class Obd2BluetoothClient : AutoCloseable {
                     }
                 }
 
-                // Mode 01 / PID 00 only reads which standard live-data PIDs are supported.
+                // Mode 01 / PID 00 reads which standard live-data PIDs are supported.
                 val ecuResponse = exchange(input, output, "0100", 12_000L)
+                val livePidResponses = linkedMapOf<Int, String>()
+                val supportedPids = Obd2ResponseParser.supportedPids(ecuResponse)
+
+                // Read only two standard, non-actuating Mode 01 PIDs, and only when
+                // the ECU explicitly reports support for them. This is a one-time
+                // snapshot, not a polling loop or a driver-facing live display.
+                if (supportedPids != null) {
+                    for (pid in listOf(0x0C, 0x05)) {
+                        if (pid !in supportedPids) continue
+                        val command = "01" + pid.toString(16).uppercase().padStart(2, '0')
+                        livePidResponses[pid] = try {
+                            exchange(input, output, command, 4_000L)
+                        } catch (error: IOException) {
+                            error.message ?: "Нет ответа"
+                        }
+                    }
+                }
+
                 if (!closed) {
                     listener.onConnected(
                         device.name?.takeIf { it.isNotBlank() } ?: device.address,
                         adapterInfo,
-                        ecuResponse
+                        ecuResponse,
+                        livePidResponses
                     )
                 }
             } catch (error: SecurityException) {

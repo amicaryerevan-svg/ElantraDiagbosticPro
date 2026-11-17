@@ -403,19 +403,46 @@ class MainActivity : Activity() {
         progress.show()
 
         client.connect(device, object : Obd2BluetoothClient.Listener {
-            override fun onConnected(deviceName: String, adapterInfo: String, ecuResponse: String) {
+            override fun onConnected(deviceName: String, adapterInfo: String, ecuResponse: String, livePidResponses: Map<Int, String>) {
                 runOnUiThread {
                     if (isFinishing || isDestroyed || obd2Client !== client) return@runOnUiThread
                     if (progress.isShowing) progress.dismiss()
 
                     val supportedPids = Obd2ResponseParser.supportedPids(ecuResponse)
                     val ecuResponded = supportedPids != null
+                    val liveDataSummary = if (supportedPids != null) {
+                        buildList {
+                            if (12 in supportedPids) {
+                                val response = livePidResponses[0x0C].orEmpty()
+                                val rpm = Obd2LiveDataParser.engineRpm(response)
+                                val value = rpm?.let {
+                                    String.format(java.util.Locale.US, "%.2f", it)
+                                } ?: "нет корректного ответа"
+                                add("Обороты двигателя (010C): $value об/мин")
+                            } else {
+                                add("Обороты двигателя (010C): ЭБУ не объявил поддержку PID")
+                            }
+
+                            if (5 in supportedPids) {
+                                val response = livePidResponses[0x05].orEmpty()
+                                val temperature = Obd2LiveDataParser.coolantTemperatureC(response)
+                                val value = temperature?.let { "$it °C" } ?: "нет корректного ответа"
+                                add("Температура охлаждающей жидкости (0105): $value")
+                            } else {
+                                add("Температура охлаждающей жидкости (0105): ЭБУ не объявил поддержку PID")
+                            }
+                        }.joinToString("\n")
+                    } else {
+                        "Показания не запрашивались: корректная карта поддерживаемых PID не получена."
+                    }
+
                     val message = if (supportedPids != null) {
                         "Bluetooth SPP подключён. Адаптер: $deviceName\n\n" +
                             "Ответ ELM327: $adapterInfo\n\n" +
                             "ЭБУ ответил на запрос поддерживаемых параметров (0100):\n$ecuResponse\n\n" +
                             "Расшифровка карты PID:\n${Obd2ResponseParser.describeSupportedPids(supportedPids)}\n\n" +
-                            "Это список возможностей ЭБУ, а не текущие значения датчиков."
+                            "Однократное чтение поддерживаемых параметров:\n$liveDataSummary\n\n" +
+                            "Это моментальный снимок, а не потоковая телеметрия. Используй диагностику на стоянке; не смотри на экран во время движения."
                     } else {
                         "Bluetooth SPP подключён к $deviceName, но корректный ответ ЭБУ на PID 0100 не подтверждён.\n\n" +
                             "Ответ адаптера: $ecuResponse\n\n" +
