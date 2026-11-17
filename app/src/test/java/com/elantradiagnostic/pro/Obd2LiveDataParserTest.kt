@@ -8,7 +8,7 @@ class Obd2LiveDataParserTest {
 
     @Test
     fun decodesEngineRpmFromSpacedResponse() {
-        assertEquals(1726.0, Obd2LiveDataParser.engineRpm("41 0C 1A F8"), 0.0)
+        assertEquals(1726.0, Obd2LiveDataParser.engineRpm("41 0C 1A F8")!!, 0.0)
     }
 
     @Test
@@ -26,7 +26,7 @@ class Obd2LiveDataParserTest {
     fun acceptsCanHeaderAndIgnoresAdapterText() {
         assertEquals(
             1726.0,
-            Obd2LiveDataParser.engineRpm("SEARCHING...\r7E8 04 41 0C 1A F8\r>"),
+            Obd2LiveDataParser.engineRpm("SEARCHING...\r7E8 04 41 0C 1A F8\r>")!!,
             0.0
         )
     }
