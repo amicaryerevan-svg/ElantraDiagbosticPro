@@ -2,7 +2,7 @@
 
 ## Supported adapter type
 
-Version 1.6 adds an initial read-only connection test for an already-paired **Bluetooth Classic RFCOMM SPP** ELM327-compatible adapter.
+Version 1.4 introduced the initial read-only connection test for an already-paired **Bluetooth Classic RFCOMM SPP** ELM327-compatible adapter. Version 1.6 adds one-time live readings for supported standard PIDs.
 
 It does not support BLE-only adapters or Wi-Fi OBD-II adapters yet. Some inexpensive ELM327 clones advertise compatibility but do not implement the standard SPP service reliably.
 
@@ -30,7 +30,7 @@ A response containing `41 00` (or the compact equivalent `4100`) indicates that 
 
 This bitmap describes ECU capabilities only. When the ECU advertises support, version 1.6 also makes one read-only request for engine RPM (`010C`) and coolant temperature (`0105`). RPM is decoded as `(256 × A + B) / 4`; coolant temperature is `A − 40 °C`. These are one-time values captured during connection, not continuous telemetry. A Bluetooth connection without a valid `41 00` bitmap means the phone reached the adapter, but ECU communication has not been confirmed.
 
-The app then requests `010C` (engine RPM) and `0105` (coolant temperature) only if the ECU advertised those PIDs. RPM is decoded as `(256 × A + B) / 4`; coolant temperature is `A − 40 °C`. These are single readings taken during connection, not continuous polling. Use this diagnostic screen only while safely parked. No trouble codes are cleared, no actuator tests are run, and no vehicle-control commands are sent.
+Use this diagnostic screen only while safely parked. No trouble codes are cleared, no actuator tests are run, and no vehicle-control commands are sent.
 
 ## Android permissions
 
