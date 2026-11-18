@@ -20,7 +20,7 @@ import java.util.concurrent.Executors
 internal class Obd2BluetoothClient : AutoCloseable {
 
     interface Listener {
-        fun onConnected(deviceName: String, adapterInfo: String, ecuResponse: String, livePidResponses: Map<Int, String>)
+        fun onConnected(deviceName: String, adapterInfo: String, ecuResponse: String, livePidResponses: Map<Int, String>, dtcResponse: String)
         fun onFailure(message: String)
     }
 
@@ -71,12 +71,25 @@ internal class Obd2BluetoothClient : AutoCloseable {
                     }
                 }
 
+                // Mode 03 is read-only and returns stored emission-related powertrain DTCs.
+                // Run it only after the ECU has answered the supported-PID handshake.
+                val dtcResponse = if (supportedPids != null) {
+                    try {
+                        exchange(input, output, "03", 8_000L)
+                    } catch (error: IOException) {
+                        error.message ?: "Нет ответа"
+                    }
+                } else {
+                    "Не запрашивался: корректный ответ PID 0100 не получен."
+                }
+
                 if (!closed) {
                     listener.onConnected(
                         device.name?.takeIf { it.isNotBlank() } ?: device.address,
                         adapterInfo,
                         ecuResponse,
-                        livePidResponses
+                        livePidResponses,
+                        dtcResponse
                     )
                 }
             } catch (error: SecurityException) {

@@ -129,11 +129,11 @@ class MainActivity : Activity() {
         }
 
         addButton(layout, "⚙️  Ошибки двигателя") {
-            showInfo("Ошибки двигателя", "В версии 1.6 расшифровывается карта поддерживаемых PID и при наличии поддержки считываются RPM и температура охлаждающей жидкости. Чтение кодов DTC ещё не реализовано. Диагностика по симптомам не заменяет сканирование автомобиля.")
+            showInfo("Ошибки двигателя", "В версии 1.7 при подключении ELM327 выполняется чтение стандартных сохранённых кодов DTC через OBD-II Mode 03. Для этого выбери «Подключить ELM327 Bluetooth». Mode 03 не читает все блоки ABS, SRS, кузова и трансмиссии; коды не стираются.")
         }
 
         addButton(layout, "📊  Датчики двигателя") {
-            showInfo("Датчики двигателя", "Версия 1.6 расшифровывает карту поддерживаемых PID 01–20 из ответа 0100 и один раз запрашивает RPM (010C) и температуру охлаждающей жидкости (0105), если ЭБУ объявил их поддержку. Это снимок при подключении, а не непрерывная телеметрия; скорость пока не запрашивается.")
+            showInfo("Датчики двигателя", "Версия 1.7 расшифровывает карту поддерживаемых PID 01–20 и один раз запрашивает RPM (010C) и температуру охлаждающей жидкости (0105), если ЭБУ объявил их поддержку. Это снимок при подключении, а не непрерывная телеметрия; скорость пока не запрашивается.")
         }
 
         addButton(layout, "📋  История диагностики") {
@@ -152,7 +152,7 @@ class MainActivity : Activity() {
         addButton(layout, "🎨  Оформление Sport / Neon") { showThemePicker() }
 
         addButton(layout, "ℹ️  О приложении") {
-            showInfo("Elantra Diagnostic Pro", "Версия 1.6\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
+            showInfo("Elantra Diagnostic Pro", "Версия 1.7\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
         }
 
         val footer = TextView(this).apply {
@@ -403,7 +403,7 @@ class MainActivity : Activity() {
         progress.show()
 
         client.connect(device, object : Obd2BluetoothClient.Listener {
-            override fun onConnected(deviceName: String, adapterInfo: String, ecuResponse: String, livePidResponses: Map<Int, String>) {
+            override fun onConnected(deviceName: String, adapterInfo: String, ecuResponse: String, livePidResponses: Map<Int, String>, dtcResponse: String) {
                 runOnUiThread {
                     if (isFinishing || isDestroyed || obd2Client !== client) return@runOnUiThread
                     if (progress.isShowing) progress.dismiss()
@@ -436,16 +436,32 @@ class MainActivity : Activity() {
                         "Показания не запрашивались: корректная карта поддерживаемых PID не получена."
                     }
 
+                    val dtcSummary = if (supportedPids != null) {
+                        when (val codes = Obd2DtcParser.troubleCodes(dtcResponse)) {
+                            null -> "Нет корректного ответа на Mode 03. Ответ адаптера: $dtcResponse"
+                            else -> if (codes.isEmpty()) {
+                                "Сохранённые стандартные коды Mode 03 не обнаружены."
+                            } else {
+                                "Найдено кодов: ${codes.size}\n" + codes.joinToString("\n")
+                            }
+                        }
+                    } else {
+                        "Не запрашивались: корректный ответ ЭБУ на PID 0100 не получен."
+                    }
+
                     val message = if (supportedPids != null) {
                         "Bluetooth SPP подключён. Адаптер: $deviceName\n\n" +
                             "Ответ ELM327: $adapterInfo\n\n" +
                             "ЭБУ ответил на запрос поддерживаемых параметров (0100):\n$ecuResponse\n\n" +
                             "Расшифровка карты PID:\n${Obd2ResponseParser.describeSupportedPids(supportedPids)}\n\n" +
                             "Однократное чтение поддерживаемых параметров:\n$liveDataSummary\n\n" +
+                            "Сохранённые коды неисправностей (Mode 03):\n$dtcSummary\n\n" +
+                            "Mode 03 охватывает стандартные emission-related коды силового агрегата, а не все блоки ABS, SRS, кузова или трансмиссии.\n\n" +
                             "Это моментальный снимок, а не потоковая телеметрия. Используй диагностику на стоянке; не смотри на экран во время движения."
                     } else {
                         "Bluetooth SPP подключён к $deviceName, но корректный ответ ЭБУ на PID 0100 не подтверждён.\n\n" +
                             "Ответ адаптера: $ecuResponse\n\n" +
+                            "Коды Mode 03: $dtcSummary\n\n" +
                             "Проверь совместимость ELM327, положение ключа ON и подключение адаптера. " +
                             "Не запускай двигатель только ради этой проверки."
                     }

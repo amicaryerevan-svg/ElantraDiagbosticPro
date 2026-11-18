@@ -2,9 +2,9 @@
 
 ## Supported adapter type
 
-Version 1.4 introduced the initial read-only connection test for an already-paired **Bluetooth Classic RFCOMM SPP** ELM327-compatible adapter. Version 1.6 adds one-time live readings for supported standard PIDs.
+Version 1.4 introduced the initial read-only connection test for an already-paired **Bluetooth Classic RFCOMM SPP** ELM327-compatible adapter. Version 1.6 added one-time readings for supported standard PIDs. Version 1.7 adds a read-only request for stored emission-related powertrain DTCs (OBD-II Mode 03).
 
-It does not support BLE-only adapters or Wi-Fi OBD-II adapters yet. Some inexpensive ELM327 clones advertise compatibility but do not implement the standard SPP service reliably.
+The app does not support BLE-only adapters or Wi-Fi OBD-II adapters yet. Some inexpensive ELM327 clones advertise compatibility but do not implement the standard SPP service reliably.
 
 ## Pair the adapter
 
@@ -17,7 +17,7 @@ It does not support BLE-only adapters or Wi-Fi OBD-II adapters yet. Some inexpen
 
 The app intentionally reads only the phone's bonded-device list. It does not perform Bluetooth discovery or scan for nearby devices.
 
-## What the first test does
+## What the connection test does
 
 After opening the standard Bluetooth Classic SPP connection, the app sends the ELM initialization commands:
 
@@ -26,11 +26,19 @@ After opening the standard Bluetooth Classic SPP connection, the app sends the E
 - `ATSP0` — request automatic OBD protocol selection
 - `0100` — read the standard PID 00 supported-PID bitmap from the ECU
 
-A response containing `41 00` (or the compact equivalent `4100`) indicates that the ECU answered the supported-PID query. Version 1.6 also decodes the four-byte PID support bitmap that follows this header and lists which standard PIDs 01–20 the ECU reports as supported. In particular, it highlights PID 05 (coolant temperature) and PID 0C (engine RPM).
+A response containing `41 00` (or the compact equivalent `4100`) indicates that the ECU answered the supported-PID query. The app decodes the four-byte PID support bitmap and lists which standard PIDs 01–20 the ECU reports as supported. It highlights PID 05 (coolant temperature) and PID 0C (engine RPM).
 
-This bitmap describes ECU capabilities only. When the ECU advertises support, version 1.6 also makes one read-only request for engine RPM (`010C`) and coolant temperature (`0105`). RPM is decoded as `(256 × A + B) / 4`; coolant temperature is `A − 40 °C`. These are one-time values captured during connection, not continuous telemetry. A Bluetooth connection without a valid `41 00` bitmap means the phone reached the adapter, but ECU communication has not been confirmed.
+When the ECU advertises support, the app makes one read-only request for engine RPM (`010C`) and coolant temperature (`0105`). RPM is decoded as `(256 × A + B) / 4`; coolant temperature is `A − 40 °C`. These are one-time values captured during connection, not continuous telemetry.
 
-Use this diagnostic screen only while safely parked. No trouble codes are cleared, no actuator tests are run, and no vehicle-control commands are sent.
+After a valid PID 0100 handshake, version 1.7 also sends **Mode 03** to read stored emission-related powertrain DTCs. A positive response starts with `43`; each DTC is decoded from two data bytes into its standard five-character form (P, C, B, or U family). A `00 00` pair marks the end of the reported codes. The parser rejects missing or incomplete responses instead of presenting partial codes as valid.
+
+A valid Mode 03 response with no codes is shown separately from an adapter timeout or malformed response. Mode 03 does not provide a complete scan of every vehicle module: ABS, airbag/SRS, body electronics, and manufacturer-specific transmission data may require a Hyundai-capable enhanced diagnostic tool.
+
+A Bluetooth connection without a valid `41 00` bitmap means the phone reached the adapter, but the ECU communication handshake was not confirmed. In that case, Mode 03 is not requested.
+
+## Read-only safety
+
+The app sends only adapter setup commands and standard read-only OBD requests: Mode 01 PIDs and Mode 03 DTC retrieval. It does **not** send Mode 04 clear/reset commands, actuator tests, coding, or vehicle-control commands. Use the diagnostic screen only while safely parked; do not watch or operate it while driving.
 
 ## Android permissions
 
@@ -44,10 +52,11 @@ Use this diagnostic screen only while safely parked. No trouble codes are cleare
 - Close other OBD apps that may already be using the adapter.
 - Confirm Bluetooth is enabled and the adapter is powered.
 - If Bluetooth connects but the ECU does not answer, check ignition position, adapter fit, protocol compatibility, and clone quality.
-- A Wi-Fi or BLE adapter will not work with this first SPP implementation.
+- If Mode 03 returns `NO DATA`, this is not proof that the car has no faults; the ECU/adapter may not have returned a valid response.
+- A Wi-Fi or BLE adapter will not work with this SPP implementation.
 
 ## Known limitations and next step
 
-The current implementation verifies the SPP link, performs the read-only `0100` supported-PID query, decodes the PID 01–20 bitmap, and makes a one-time read-only request for RPM (`010C`) and coolant temperature (`0105`) when supported. It does **not** yet poll live values continuously, request vehicle speed (`010D`), or read diagnostic trouble codes (Mode 03). The next step is a separately tested read-only Mode 03 DTC decoder, followed by physical validation with a real adapter.
+Version 1.7 performs a one-time PID capability query, reads RPM and coolant temperature when supported, and parses standard Mode 03 DTCs. It does not continuously poll values, read freeze-frame data, retrieve manufacturer-specific enhanced codes, or clear faults. The next step is physical validation with a real ELM327 and the Elantra, followed by better code descriptions and connection-reliability tests.
 
-CI can verify compilation and APK packaging, but only a physical ELM327 adapter and the Elantra can confirm the Bluetooth and ECU handshake end to end.
+CI can verify parser tests, compilation, and APK packaging, but only a physical ELM327 adapter and the Elantra can confirm the Bluetooth and ECU handshake end to end.
