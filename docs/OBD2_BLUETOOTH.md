@@ -2,7 +2,7 @@
 
 ## Supported adapter type
 
-Version 1.4 introduced the initial read-only connection test for an already-paired **Bluetooth Classic RFCOMM SPP** ELM327-compatible adapter. Version 1.6 added one-time readings for supported standard PIDs. Version 1.7 adds a read-only request for stored emission-related powertrain DTCs (OBD-II Mode 03).
+Version 1.4 introduced the initial read-only connection test for an already-paired **Bluetooth Classic RFCOMM SPP** ELM327-compatible adapter. Version 1.6 added one-time readings for supported standard PIDs. Version 1.8 adds a read-only request for stored emission-related powertrain DTCs (OBD-II Mode 03).
 
 The app does not support BLE-only adapters or Wi-Fi OBD-II adapters yet. Some inexpensive ELM327 clones advertise compatibility but do not implement the standard SPP service reliably.
 
@@ -36,6 +36,10 @@ A valid Mode 03 response with no codes is shown separately from an adapter timeo
 
 A Bluetooth connection without a valid `41 00` bitmap means the phone reached the adapter, but the ECU communication handshake was not confirmed. In that case, Mode 03 is not requested.
 
+## ELM327 response framing and timeout handling
+
+Version 1.8 treats the ELM327 prompt (`>`) as the required end of every command response. Bytes received in multiple Bluetooth reads are accumulated until that prompt arrives. If the timeout expires first, the command is considered incomplete and the current diagnostic transaction is stopped; the app does not send another PID or Mode 03 request on a potentially desynchronized stream. This avoids interpreting delayed bytes from one command as the response to the next. Replies are also capped at 8 KiB to prevent an unexpectedly noisy adapter from growing the response buffer without limit.
+
 ## Read-only safety
 
 The app sends only adapter setup commands and standard read-only OBD requests: Mode 01 PIDs and Mode 03 DTC retrieval. It does **not** send Mode 04 clear/reset commands, actuator tests, coding, or vehicle-control commands. Use the diagnostic screen only while safely parked; do not watch or operate it while driving.
@@ -57,6 +61,6 @@ The app sends only adapter setup commands and standard read-only OBD requests: M
 
 ## Known limitations and next step
 
-Version 1.7 performs a one-time PID capability query, reads RPM and coolant temperature when supported, and parses standard Mode 03 DTCs. It does not continuously poll values, read freeze-frame data, retrieve manufacturer-specific enhanced codes, or clear faults. The next step is physical validation with a real ELM327 and the Elantra, followed by better code descriptions and connection-reliability tests.
+Version 1.8 performs a one-time PID capability query, reads RPM and coolant temperature when supported, and parses standard Mode 03 DTCs. It does not continuously poll values, read freeze-frame data, retrieve manufacturer-specific enhanced codes, or clear faults. The next step is physical validation with a real ELM327 and the Elantra, followed by better code descriptions and connection-reliability tests.
 
 CI can verify parser tests, compilation, and APK packaging, but only a physical ELM327 adapter and the Elantra can confirm the Bluetooth and ECU handshake end to end.
