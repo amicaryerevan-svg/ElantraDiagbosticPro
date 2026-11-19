@@ -11,12 +11,15 @@ class Elm327ResponseAccumulatorTest {
     fun waitsForPromptAcrossMultipleReads() {
         val accumulator = Elm327ResponseAccumulator()
 
-        assertFalse(accumulator.append("41 0C 1A".toByteArray(), 8))
+        val firstChunk = "41 0C 1A ".toByteArray()
+        assertFalse(accumulator.append(firstChunk, firstChunk.size))
         assertFalse(accumulator.isComplete)
-        assertTrue(accumulator.append("F8\r>".toByteArray(), 5))
+
+        val secondChunk = "F8\r>".toByteArray()
+        assertTrue(accumulator.append(secondChunk, secondChunk.size))
 
         assertTrue(accumulator.isComplete)
-        assertEquals("41 0C 1AF8", accumulator.content())
+        assertEquals("41 0C 1A F8", accumulator.content())
     }
 
     @Test
