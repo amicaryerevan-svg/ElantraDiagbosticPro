@@ -63,22 +63,19 @@ internal class Obd2BluetoothClient : AutoCloseable {
                     for (pid in listOf(0x0C, 0x05)) {
                         if (pid !in supportedPids) continue
                         val command = "01" + pid.toString(16).uppercase().padStart(2, '0')
-                        livePidResponses[pid] = try {
-                            exchange(input, output, command, 4_000L)
-                        } catch (error: IOException) {
-                            error.message ?: "Нет ответа"
-                        }
+                        // A command must finish with the ELM327 prompt. If it times out,
+                        // abort the transaction rather than risk assigning late bytes to
+                        // the next PID response.
+                        livePidResponses[pid] = exchange(input, output, command, 4_000L)
                     }
                 }
 
                 // Mode 03 is read-only and returns stored emission-related powertrain DTCs.
                 // Run it only after the ECU has answered the supported-PID handshake.
                 val dtcResponse = if (supportedPids != null) {
-                    try {
-                        exchange(input, output, "03", 8_000L)
-                    } catch (error: IOException) {
-                        error.message ?: "Нет ответа"
-                    }
+                    // Keep the command stream synchronized: an incomplete reply aborts
+                    // the connection instead of allowing stale bytes into another query.
+                    exchange(input, output, "03", 8_000L)
                 } else {
                     "Не запрашивался: корректный ответ PID 0100 не получен."
                 }
@@ -123,7 +120,7 @@ internal class Obd2BluetoothClient : AutoCloseable {
         output.write((command + "\r").toByteArray(StandardCharsets.US_ASCII))
         output.flush()
 
-        val response = StringBuilder()
+        val response = Elm327ResponseAccumulator()
         val deadline = SystemClock.elapsedRealtime() + timeoutMs
 
         while (SystemClock.elapsedRealtime() < deadline) {
@@ -136,24 +133,22 @@ internal class Obd2BluetoothClient : AutoCloseable {
                 val buffer = ByteArray(minOf(available, 256))
                 val count = input.read(buffer)
                 if (count < 0) throw EOFException("OBD2 адаптер закрыл соединение.")
-
-                for (index in 0 until count) {
-                    val character = buffer[index].toInt().toChar()
-                    if (character == '>') {
-                        return response.toString().trim()
-                    }
-                    response.append(character)
+                if (response.append(buffer, count)) {
+                    return response.content()
                 }
             } else {
                 Thread.sleep(25L)
             }
         }
 
-        val result = response.toString().trim()
-        if (result.isEmpty()) {
+        val partial = response.content()
+        if (partial.isEmpty()) {
             throw IOException("Нет ответа от адаптера на команду $command.")
         }
-        return result
+        throw IOException(
+            "Ответ на команду $command не завершён: адаптер не прислал приглашение '>'. " +
+                "Получено: ${partial.take(120)}"
+        )
     }
 
     private fun closeSocket() {
