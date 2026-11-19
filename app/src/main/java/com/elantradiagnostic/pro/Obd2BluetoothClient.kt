@@ -14,8 +14,9 @@ import java.util.concurrent.Executors
 /**
  * Minimal read-only ELM327 client for already-paired Bluetooth Classic SPP adapters.
  *
- * It performs the ELM initialization sequence and the read-only 0100 supported-PIDs
- * query. It does not clear trouble codes or send actuator/control commands.
+ * It performs the ELM initialization sequence, reads supported standard PIDs, takes
+ * one-time RPM/coolant snapshots, and retrieves stored Mode 03 DTCs. It does not
+ * clear trouble codes or send actuator/control commands.
  */
 internal class Obd2BluetoothClient : AutoCloseable {
 
