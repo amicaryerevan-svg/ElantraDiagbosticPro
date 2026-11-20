@@ -36,6 +36,12 @@ A valid Mode 03 response with no codes is shown separately from an adapter timeo
 
 A Bluetooth connection without a valid `41 00` bitmap means the phone reached the adapter, but the ECU communication handshake was not confirmed. In that case, Mode 03 is not requested.
 
+## Automatic disconnect after a one-time scan
+
+Version 1.9 closes the Bluetooth RFCOMM socket after the final supported-PID and Mode 03 responses have been collected, before the result dialog is shown. The app currently captures a one-time snapshot rather than streaming live telemetry, so keeping the adapter connected after the scan provides no benefit and can prevent another diagnostic app from using it. Dismissing the result dialog therefore does not leave the ELM327 connection open.
+
+If the user cancels while the connection or a command is still in progress, the client closes the socket and stops the pending diagnostic sequence. Android documents that closing a BluetoothSocket from another thread can abort a blocking connect operation.
+
 ## ELM327 response framing and timeout handling
 
 Version 1.8 treats the ELM327 prompt (`>`) as the required end of every command response. Bytes received in multiple Bluetooth reads are accumulated until that prompt arrives. If the timeout expires first, the command is considered incomplete and the current diagnostic transaction is stopped; the app does not send another PID or Mode 03 request on a potentially desynchronized stream. This avoids interpreting delayed bytes from one command as the response to the next. Replies are also capped at 8 KiB to prevent an unexpectedly noisy adapter from growing the response buffer without limit.
@@ -61,6 +67,6 @@ The app sends only adapter setup commands and standard read-only OBD requests: M
 
 ## Known limitations and next step
 
-Version 1.8 performs a one-time PID capability query, reads RPM and coolant temperature when supported, and parses standard Mode 03 DTCs. It does not continuously poll values, read freeze-frame data, retrieve manufacturer-specific enhanced codes, or clear faults. The next step is physical validation with a real ELM327 and the Elantra, followed by better code descriptions and connection-reliability tests.
+Version 1.9 performs a one-time PID capability query, reads RPM and coolant temperature when supported, and parses standard Mode 03 DTCs. The RFCOMM connection is released as soon as the one-time scan finishes. It does not continuously poll values, read freeze-frame data, retrieve manufacturer-specific enhanced codes, or clear faults. The next step is physical validation with a real ELM327 and the Elantra, followed by better code descriptions and connection-reliability tests.
 
 CI can verify parser tests, compilation, and APK packaging, but only a physical ELM327 adapter and the Elantra can confirm the Bluetooth and ECU handshake end to end.

@@ -133,7 +133,7 @@ class MainActivity : Activity() {
         }
 
         addButton(layout, "📊  Датчики двигателя") {
-            showInfo("Датчики двигателя", "Версия 1.8 расшифровывает карту поддерживаемых PID 01–20 и один раз запрашивает RPM (010C) и температуру охлаждающей жидкости (0105), если ЭБУ объявил их поддержку. Это снимок при подключении, а не непрерывная телеметрия; скорость пока не запрашивается.")
+            showInfo("Датчики двигателя", "Версия 1.9 расшифровывает карту поддерживаемых PID 01–20 и один раз запрашивает RPM (010C) и температуру охлаждающей жидкости (0105), если ЭБУ объявил их поддержку. Это снимок при подключении, а не непрерывная телеметрия; скорость пока не запрашивается.")
         }
 
         addButton(layout, "📋  История диагностики") {
@@ -152,7 +152,7 @@ class MainActivity : Activity() {
         addButton(layout, "🎨  Оформление Sport / Neon") { showThemePicker() }
 
         addButton(layout, "ℹ️  О приложении") {
-            showInfo("Elantra Diagnostic Pro", "Версия 1.8\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
+            showInfo("Elantra Diagnostic Pro", "Версия 1.9\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
         }
 
         val footer = TextView(this).apply {
@@ -450,7 +450,7 @@ class MainActivity : Activity() {
                     }
 
                     val message = if (supportedPids != null) {
-                        "Bluetooth SPP подключён. Адаптер: $deviceName\n\n" +
+                        "Диагностический сеанс завершён; Bluetooth отключён. Адаптер: $deviceName\n\n" +
                             "Ответ ELM327: $adapterInfo\n\n" +
                             "ЭБУ ответил на запрос поддерживаемых параметров (0100):\n$ecuResponse\n\n" +
                             "Расшифровка карты PID:\n${Obd2ResponseParser.describeSupportedPids(supportedPids)}\n\n" +
@@ -459,7 +459,7 @@ class MainActivity : Activity() {
                             "Mode 03 охватывает стандартные emission-related коды силового агрегата, а не все блоки ABS, SRS, кузова или трансмиссии.\n\n" +
                             "Это моментальный снимок, а не потоковая телеметрия. Используй диагностику на стоянке; не смотри на экран во время движения."
                     } else {
-                        "Bluetooth SPP подключён к $deviceName, но корректный ответ ЭБУ на PID 0100 не подтверждён.\n\n" +
+                        "Bluetooth-подключение к $deviceName выполнено, но корректный ответ ЭБУ на PID 0100 не подтверждён. Сеанс завершён, Bluetooth отключён.\n\n" +
                             "Ответ адаптера: $ecuResponse\n\n" +
                             "Коды Mode 03: $dtcSummary\n\n" +
                             "Проверь совместимость ELM327, положение ключа ON и подключение адаптера. " +
@@ -467,12 +467,8 @@ class MainActivity : Activity() {
                     }
 
                     android.app.AlertDialog.Builder(this@MainActivity)
-                        .setTitle(if (ecuResponded) "Связь с ЭБУ подтверждена" else "Адаптер подключён")
+                        .setTitle(if (ecuResponded) "Диагностика завершена" else "ЭБУ не ответил")
                         .setMessage(message)
-                        .setNeutralButton("Отключить") { _, _ ->
-                            client.close()
-                            if (obd2Client === client) obd2Client = null
-                        }
                         .setPositiveButton("Готово", null)
                         .show()
                 }

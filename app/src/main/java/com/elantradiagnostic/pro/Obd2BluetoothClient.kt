@@ -82,13 +82,24 @@ internal class Obd2BluetoothClient : AutoCloseable {
                 }
 
                 if (!closed) {
-                    listener.onConnected(
-                        device.name?.takeIf { it.isNotBlank() } ?: device.address,
-                        adapterInfo,
-                        ecuResponse,
-                        livePidResponses,
-                        dtcResponse
-                    )
+                    val resultDeviceName =
+                        device.name?.takeIf { it.isNotBlank() } ?: device.address
+
+                    // This client currently performs a one-time diagnostic snapshot, not
+                    // continuous telemetry. Release the adapter before reporting the result
+                    // so dismissing the dialog cannot leave the RFCOMM channel occupied.
+                    closeSocket()
+                    executor.shutdown()
+
+                    if (!closed) {
+                        listener.onConnected(
+                            resultDeviceName,
+                            adapterInfo,
+                            ecuResponse,
+                            livePidResponses,
+                            dtcResponse
+                        )
+                    }
                 }
             } catch (error: SecurityException) {
                 closeSocket()
