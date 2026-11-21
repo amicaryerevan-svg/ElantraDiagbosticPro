@@ -46,6 +46,12 @@ If the user cancels while the connection or a command is still in progress, the 
 
 Version 1.8 treats the ELM327 prompt (`>`) as the required end of every command response. Bytes received in multiple Bluetooth reads are accumulated until that prompt arrives. If the timeout expires first, the command is considered incomplete and the current diagnostic transaction is stopped; the app does not send another PID or Mode 03 request on a potentially desynchronized stream. This avoids interpreting delayed bytes from one command as the response to the next. Replies are also capped at 8 KiB to prevent an unexpectedly noisy adapter from growing the response buffer without limit.
 
+## Local diagnostic history
+
+Version 1.10 stores the most recent 20 completed Bluetooth diagnostic reports locally in the app's private preferences. Each entry includes the date/time, paired adapter name, and the same summary shown after the scan (ECU handshake, supported PIDs, one-time RPM/coolant values, and Mode 03 result). The **История диагностики** menu opens saved reports; the user can clear all saved reports from that screen. No diagnostic history is uploaded or synchronized.
+
+A report is saved only after the diagnostic client has completed its one-time exchange and returned a result. A failed Bluetooth connection that never reaches the result callback is not stored. History is a convenience record, not a live vehicle connection or a service record verified by a repair shop.
+
 ## Read-only safety
 
 The app sends only adapter setup commands and standard read-only OBD requests: Mode 01 PIDs and Mode 03 DTC retrieval. It does **not** send Mode 04 clear/reset commands, actuator tests, coding, or vehicle-control commands. Use the diagnostic screen only while safely parked; do not watch or operate it while driving.
