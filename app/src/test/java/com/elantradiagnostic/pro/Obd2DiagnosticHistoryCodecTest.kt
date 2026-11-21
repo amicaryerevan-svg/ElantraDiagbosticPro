@@ -21,15 +21,16 @@ class Obd2DiagnosticHistoryCodecTest {
 
     @Test
     fun keepsOnlyTheMostRecentTwentyEntries() {
-        val entries = (1L..25L).map {
+        // The app prepends each new session, so entries are ordered newest first.
+        val entries = (25L downTo 1L).map {
             Obd2DiagnosticHistoryEntry(it, "ELM327", "Сеанс $it")
         }
 
         val decoded = Obd2DiagnosticHistoryCodec.decode(Obd2DiagnosticHistoryCodec.encode(entries))
 
         assertEquals(Obd2DiagnosticHistoryCodec.MAX_ENTRIES, decoded.size)
-        assertEquals(1L, decoded.first().timestampMillis)
-        assertEquals(20L, decoded.last().timestampMillis)
+        assertEquals(25L, decoded.first().timestampMillis)
+        assertEquals(6L, decoded.last().timestampMillis)
     }
 
     @Test
