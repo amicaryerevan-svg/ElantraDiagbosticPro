@@ -17,6 +17,7 @@ class MainActivity : Activity() {
     companion object {
         private const val REQUEST_AUDIO_PERMISSION = 4102
         private const val REQUEST_OBD2_PERMISSION = 4106
+        private const val OBD2_HISTORY_KEY = "obd2_history_v1"
     }
 
     private var bg = Color.rgb(10, 16, 28)
@@ -129,15 +130,15 @@ class MainActivity : Activity() {
         }
 
         addButton(layout, "⚙️  Ошибки двигателя") {
-            showInfo("Ошибки двигателя", "В версии 1.8 при подключении ELM327 выполняется чтение стандартных сохранённых кодов DTC через OBD-II Mode 03. Для этого выбери «Подключить ELM327 Bluetooth». Mode 03 не читает все блоки ABS, SRS, кузова и трансмиссии; коды не стираются.")
+            showInfo("Ошибки двигателя", "При подключении ELM327 приложение выполняет чтение стандартных сохранённых кодов DTC через OBD-II Mode 03. Для этого выбери «Подключить ELM327 Bluetooth». Mode 03 не читает все блоки ABS, SRS, кузова и трансмиссии; коды не стираются.")
         }
 
         addButton(layout, "📊  Датчики двигателя") {
-            showInfo("Датчики двигателя", "Версия 1.9 расшифровывает карту поддерживаемых PID 01–20 и один раз запрашивает RPM (010C) и температуру охлаждающей жидкости (0105), если ЭБУ объявил их поддержку. Это снимок при подключении, а не непрерывная телеметрия; скорость пока не запрашивается.")
+            showInfo("Датчики двигателя", "При диагностическом снимке приложение расшифровывает карту поддерживаемых PID 01–20 и один раз запрашивает RPM (010C) и температуру охлаждающей жидкости (0105), если ЭБУ объявил их поддержку. Это снимок при подключении, а не непрерывная телеметрия; скорость пока не запрашивается.")
         }
 
         addButton(layout, "📋  История диагностики") {
-            showInfo("История", "История пока не сохраняется. Результаты этой версии диагностики можно записать вручную.")
+            showObd2History()
         }
 
         addButton(layout, "🚘  GPS-панель и скорость") { showGpsPanel() }
@@ -152,7 +153,7 @@ class MainActivity : Activity() {
         addButton(layout, "🎨  Оформление Sport / Neon") { showThemePicker() }
 
         addButton(layout, "ℹ️  О приложении") {
-            showInfo("Elantra Diagnostic Pro", "Версия 1.9\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
+            showInfo("Elantra Diagnostic Pro", "Версия 1.10\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
         }
 
         val footer = TextView(this).apply {
@@ -205,6 +206,52 @@ class MainActivity : Activity() {
 
 
     private fun prefs() = getSharedPreferences("elantra_data", MODE_PRIVATE)
+
+    private fun saveObd2History(entry: Obd2DiagnosticHistoryEntry) {
+        val previous = Obd2DiagnosticHistoryCodec.decode(
+            prefs().getString(OBD2_HISTORY_KEY, "").orEmpty()
+        )
+        val updated = (listOf(entry) + previous).take(Obd2DiagnosticHistoryCodec.MAX_ENTRIES)
+        prefs().edit()
+            .putString(OBD2_HISTORY_KEY, Obd2DiagnosticHistoryCodec.encode(updated))
+            .apply()
+    }
+
+    private fun showObd2History() {
+        val entries = Obd2DiagnosticHistoryCodec.decode(
+            prefs().getString(OBD2_HISTORY_KEY, "").orEmpty()
+        )
+        if (entries.isEmpty()) {
+            showInfo("История диагностики", "Сохранённых сеансов пока нет. Выполни проверку через сопряжённый ELM327 Bluetooth.")
+            return
+        }
+
+        val formatter = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.getDefault())
+        val labels = entries.map { entry ->
+            "${formatter.format(java.util.Date(entry.timestampMillis))} — ${entry.adapterName}"
+        }.toTypedArray()
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Последние ${entries.size} диагностических сеансов")
+            .setItems(labels) { _, which ->
+                val entry = entries[which]
+                val date = formatter.format(java.util.Date(entry.timestampMillis))
+                showInfo("Диагностика · $date", "Адаптер: ${entry.adapterName}\n\n${entry.summary}")
+            }
+            .setNeutralButton("Очистить") { _, _ ->
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("Удалить историю?")
+                    .setMessage("Будут удалены сохранённые диагностические отчёты только на этом телефоне.")
+                    .setNegativeButton("Отмена", null)
+                    .setPositiveButton("Удалить") { _, _ ->
+                        prefs().edit().remove(OBD2_HISTORY_KEY).apply()
+                        showInfo("История очищена", "Локальные диагностические отчёты удалены с телефона.")
+                    }
+                    .show()
+            }
+            .setNegativeButton("Закрыть", null)
+            .show()
+    }
 
     private fun hasLocationPermission(): Boolean =
         checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
@@ -465,6 +512,15 @@ class MainActivity : Activity() {
                             "Проверь совместимость ELM327, положение ключа ON и подключение адаптера. " +
                             "Не запускай двигатель только ради этой проверки."
                     }
+
+                    saveObd2History(
+                        Obd2DiagnosticHistoryEntry(
+                            timestampMillis = System.currentTimeMillis(),
+                            adapterName = deviceName,
+                            summary = message
+                        )
+                    )
+                    if (obd2Client === client) obd2Client = null
 
                     android.app.AlertDialog.Builder(this@MainActivity)
                         .setTitle(if (ecuResponded) "Диагностика завершена" else "ЭБУ не ответил")
