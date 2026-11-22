@@ -153,7 +153,7 @@ class MainActivity : Activity() {
         addButton(layout, "🎨  Оформление Sport / Neon") { showThemePicker() }
 
         addButton(layout, "ℹ️  О приложении") {
-            showInfo("Elantra Diagnostic Pro", "Версия 1.10\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
+            showInfo("Elantra Diagnostic Pro", "Версия 1.11\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
         }
 
         val footer = TextView(this).apply {
@@ -489,7 +489,15 @@ class MainActivity : Activity() {
                             else -> if (codes.isEmpty()) {
                                 "Сохранённые стандартные коды Mode 03 не обнаружены."
                             } else {
-                                "Найдено кодов: ${codes.size}\n" + codes.joinToString("\n")
+                                "Найдено кодов: ${codes.size}\n" + codes.joinToString("\n") { code ->
+                                    val description = Obd2DtcDescriptions.descriptionFor(code)
+                                    if (description != null) {
+                                        "$code — $description"
+                                    } else {
+                                        "$code — нет проверенного описания в локальном справочнике."
+                                    }
+                                } +
+                                    "\n\nСправочник содержит только выбранные стандартные P0-коды. Неизвестные и производитель-специфичные коды не интерпретируются. Код указывает на обнаруженную область неисправности, а не подтверждает поломку конкретной детали. Для точной проверки используй сервисную документацию Hyundai по VIN."
                             }
                         }
                     } else {

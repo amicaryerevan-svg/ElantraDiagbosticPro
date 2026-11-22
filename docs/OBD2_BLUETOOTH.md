@@ -46,6 +46,12 @@ If the user cancels while the connection or a command is still in progress, the 
 
 Version 1.8 treats the ELM327 prompt (`>`) as the required end of every command response. Bytes received in multiple Bluetooth reads are accumulated until that prompt arrives. If the timeout expires first, the command is considered incomplete and the current diagnostic transaction is stopped; the app does not send another PID or Mode 03 request on a potentially desynchronized stream. This avoids interpreting delayed bytes from one command as the response to the next. Replies are also capped at 8 KiB to prevent an unexpectedly noisy adapter from growing the response buffer without limit.
 
+## Built-in generic DTC descriptions
+
+Version 1.11 adds a deliberately small Russian-language lookup for selected standardized P0xxx powertrain codes commonly encountered during basic OBD-II checks (including selected MAF/IAT, coolant-temperature, oxygen-sensor, fuel-trim, misfire, catalyst, EVAP, vehicle-speed, and system-voltage codes). The app displays a description beside a code only when that exact code exists in the local table.
+
+Unknown codes, manufacturer-specific codes, and B/C/U codes without an explicit entry remain labeled as unresolved; the app does not guess a Hyundai-specific meaning. A DTC is a report of a monitored condition, not proof that a particular part has failed. Confirm diagnosis and repair procedures using current Hyundai service information for the vehicle VIN and the relevant control module.
+
 ## Local diagnostic history
 
 Version 1.10 stores the most recent 20 completed Bluetooth diagnostic reports locally in the app's private preferences. Each entry includes the date/time, paired adapter name, and the same summary shown after the scan (ECU handshake, supported PIDs, one-time RPM/coolant values, and Mode 03 result). The **История диагностики** menu opens saved reports; the user can clear all saved reports from that screen. No diagnostic history is uploaded or synchronized.
@@ -73,6 +79,6 @@ The app sends only adapter setup commands and standard read-only OBD requests: M
 
 ## Known limitations and next step
 
-Version 1.9 performs a one-time PID capability query, reads RPM and coolant temperature when supported, and parses standard Mode 03 DTCs. The RFCOMM connection is released as soon as the one-time scan finishes. It does not continuously poll values, read freeze-frame data, retrieve manufacturer-specific enhanced codes, or clear faults. The next step is physical validation with a real ELM327 and the Elantra, followed by better code descriptions and connection-reliability tests.
+Version 1.9 performs a one-time PID capability query, reads RPM and coolant temperature when supported, and parses standard Mode 03 DTCs. The RFCOMM connection is released as soon as the one-time scan finishes. It does not continuously poll values, read freeze-frame data, retrieve manufacturer-specific enhanced codes, or clear faults. The built-in lookup covers only selected generic P0xxx codes. The next priority remains physical validation with a real ELM327 and the Elantra, followed by stronger connection tests and additional descriptions only when their standardized definitions can be verified.
 
 CI can verify parser tests, compilation, and APK packaging, but only a physical ELM327 adapter and the Elantra can confirm the Bluetooth and ECU handshake end to end.
