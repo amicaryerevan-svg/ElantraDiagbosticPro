@@ -77,6 +77,10 @@ The app sends only adapter setup commands and standard read-only OBD requests: M
 - If Mode 03 returns `NO DATA`, this is not proof that the car has no faults; the ECU/adapter may not have returned a valid response.
 - A Wi-Fi or BLE adapter will not work with this SPP implementation.
 
+## Exporting a diagnostic report
+
+Version 1.12 adds **Save TXT** and **Share** actions to each saved history entry. The text report includes the vehicle label, local date/time, adapter name, and the original one-time diagnostic summary. Saving uses Android's Storage Access Framework with `ACTION_CREATE_DOCUMENT`: the user chooses the destination in the system picker, and the app writes only to that selected URI. No broad storage permission is requested. The report can also be shared through Android's standard Sharesheet. Exported reports are plain text and should be treated as diagnostic notes, not as a certified workshop report.
+
 ## Known limitations and next step
 
 Version 1.9 performs a one-time PID capability query, reads RPM and coolant temperature when supported, and parses standard Mode 03 DTCs. The RFCOMM connection is released as soon as the one-time scan finishes. It does not continuously poll values, read freeze-frame data, retrieve manufacturer-specific enhanced codes, or clear faults. The built-in lookup covers only selected generic P0xxx codes. The next priority remains physical validation with a real ELM327 and the Elantra, followed by stronger connection tests and additional descriptions only when their standardized definitions can be verified.
