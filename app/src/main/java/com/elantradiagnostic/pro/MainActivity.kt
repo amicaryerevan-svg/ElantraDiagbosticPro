@@ -17,6 +17,8 @@ class MainActivity : Activity() {
     companion object {
         private const val REQUEST_AUDIO_PERMISSION = 4102
         private const val REQUEST_OBD2_PERMISSION = 4106
+        private const val REQUEST_OBD2_EXPORT = 4107
+        private const val PENDING_OBD2_EXPORT_STATE = "pending_obd2_export_text"
         private const val OBD2_HISTORY_KEY = "obd2_history_v1"
     }
 
@@ -24,6 +26,7 @@ class MainActivity : Activity() {
     private val blue = Color.rgb(35, 135, 245)
     private val white = Color.WHITE
     private var obd2Client: Obd2BluetoothClient? = null
+    private var pendingObd2ExportText: String? = null
 
     private data class Symptom(val title: String, val causes: String, val checks: String, val urgency: String)
 
@@ -65,7 +68,13 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         bg = getSharedPreferences("elantra_data", MODE_PRIVATE).getInt("theme_bg", Color.rgb(10, 16, 28))
+        pendingObd2ExportText = savedInstanceState?.getString(PENDING_OBD2_EXPORT_STATE)
         showHome()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString(PENDING_OBD2_EXPORT_STATE, pendingObd2ExportText)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onDestroy() {
@@ -153,7 +162,7 @@ class MainActivity : Activity() {
         addButton(layout, "🎨  Оформление Sport / Neon") { showThemePicker() }
 
         addButton(layout, "ℹ️  О приложении") {
-            showInfo("Elantra Diagnostic Pro", "Версия 1.11\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
+            showInfo("Elantra Diagnostic Pro", "Версия 1.12\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
         }
 
         val footer = TextView(this).apply {
@@ -236,7 +245,17 @@ class MainActivity : Activity() {
             .setItems(labels) { _, which ->
                 val entry = entries[which]
                 val date = formatter.format(java.util.Date(entry.timestampMillis))
-                showInfo("Диагностика · $date", "Адаптер: ${entry.adapterName}\n\n${entry.summary}")
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("Диагностика · $date")
+                    .setMessage("Адаптер: ${entry.adapterName}\n\n${entry.summary}")
+                    .setPositiveButton("Сохранить TXT") { _, _ ->
+                        exportObd2Report(entry)
+                    }
+                    .setNeutralButton("Поделиться") { _, _ ->
+                        shareObd2Report(entry)
+                    }
+                    .setNegativeButton("Закрыть", null)
+                    .show()
             }
             .setNeutralButton("Очистить") { _, _ ->
                 android.app.AlertDialog.Builder(this)
@@ -251,6 +270,39 @@ class MainActivity : Activity() {
             }
             .setNegativeButton("Закрыть", null)
             .show()
+    }
+
+    private fun exportObd2Report(entry: Obd2DiagnosticHistoryEntry) {
+        val report = Obd2DiagnosticReportFormatter.format(entry)
+        pendingObd2ExportText = report
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TITLE, Obd2DiagnosticReportFormatter.suggestedFileName(entry))
+        }
+        try {
+            startActivityForResult(intent, REQUEST_OBD2_EXPORT)
+        } catch (error: Exception) {
+            pendingObd2ExportText = null
+            showInfo(
+                "Экспорт отчёта",
+                error.message?.takeIf { it.isNotBlank() }
+                    ?: "Не удалось открыть системный выбор места сохранения."
+            )
+        }
+    }
+
+    private fun shareObd2Report(entry: Obd2DiagnosticHistoryEntry) {
+        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "Отчёт OBD2 — Hyundai Elantra 2021")
+            putExtra(Intent.EXTRA_TEXT, Obd2DiagnosticReportFormatter.format(entry))
+        }
+        try {
+            startActivity(Intent.createChooser(sendIntent, "Поделиться отчётом OBD2"))
+        } catch (_: Exception) {
+            showInfo("Поделиться отчётом", "На телефоне нет приложения для отправки текстовых отчётов.")
+        }
     }
 
     private fun hasLocationPermission(): Boolean =
@@ -596,11 +648,45 @@ class MainActivity : Activity() {
     @Deprecated("Activity result used for document picker and speech recognition")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == REQUEST_OBD2_EXPORT) {
+            val report = pendingObd2ExportText
+            pendingObd2ExportText = null
+            if (resultCode != RESULT_OK) return
+
+            val uri = data?.data
+            if (uri == null || report == null) {
+                showInfo("Экспорт отчёта", "Не удалось получить файл или подготовленный отчёт.")
+                return
+            }
+
+            try {
+                val output = contentResolver.openOutputStream(uri, "w")
+                    ?: throw java.io.IOException("Не удалось открыть выбранный файл для записи.")
+                output.use { it.write(report.toByteArray(Charsets.UTF_8)) }
+                showInfo("Отчёт сохранён", "Текстовый отчёт OBD2 сохранён в выбранное место.")
+            } catch (error: Exception) {
+                showInfo(
+                    "Ошибка экспорта",
+                    error.message?.takeIf { it.isNotBlank() }
+                        ?: "Не удалось записать диагностический отчёт."
+                )
+            }
+            return
+        }
+
         if (resultCode != RESULT_OK || data == null) return
         if (requestCode == 4105) {
             val uri = data.data ?: return
-            try { startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "video/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }
-            catch (_: Exception) { showInfo("Видео", "На телефоне нет приложения для воспроизведения этого видео.") }
+            try {
+                startActivity(
+                    Intent(Intent.ACTION_VIEW)
+                        .setDataAndType(uri, "video/*")
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                )
+            } catch (_: Exception) {
+                showInfo("Видео", "На телефоне нет приложения для воспроизведения этого видео.")
+            }
         } else if (requestCode == 4104) {
             val words = data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
             if (!words.isNullOrBlank()) showInfo("Распознано", words)
