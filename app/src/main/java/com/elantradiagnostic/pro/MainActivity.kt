@@ -581,14 +581,14 @@ class MainActivity : Activity() {
                             status = if (ecuResponded) {
                                 Obd2DiagnosticStatus.COMPLETED
                             } else {
-                                Obd2DiagnosticStatus.ECU_NO_RESPONSE
+                                Obd2DiagnosticStatus.ECU_RESPONSE_UNCONFIRMED
                             }
                         )
                     )
                     if (obd2Client === client) obd2Client = null
 
                     android.app.AlertDialog.Builder(this@MainActivity)
-                        .setTitle(if (ecuResponded) "Диагностика завершена" else "ЭБУ не ответил")
+                        .setTitle(if (ecuResponded) "Диагностика завершена" else "Ответ ЭБУ не подтверждён")
                         .setMessage(message)
                         .setPositiveButton("Готово", null)
                         .show()
