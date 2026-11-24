@@ -77,12 +77,24 @@ The app sends only adapter setup commands and standard read-only OBD requests: M
 - If Mode 03 returns `NO DATA`, this is not proof that the car has no faults; the ECU/adapter may not have returned a valid response.
 - A Wi-Fi or BLE adapter will not work with this SPP implementation.
 
+## Recording failed connection attempts
+
+Version 1.13 also stores failed attempts after the user selects an already-paired adapter and the app actually starts the RFCOMM connection. Each history item has a status separate from its text:
+
+- **Connection failed** — the phone could not establish the Bluetooth Classic SPP socket.
+- **Adapter did not respond** — the socket connected, but ELM327 initialization did not receive a response.
+- **ECU did not respond** — the adapter initialized, but a standard ECU request received no bytes, or the PID 0100 response did not confirm a supported-PID bitmap.
+- **Incomplete response** — bytes arrived, but the ELM327 prompt (`>`) did not arrive before the timeout.
+- **Permission denied**, **adapter error**, or **ECU exchange error** — other explicitly categorized failures.
+
+Cancelled attempts are not saved because the user intentionally stopped them. Failures that happen before an adapter is selected (for example, Bluetooth is off or there are no paired devices) are also not connection attempts and are not added. Existing version 1.12 three-field history records remain readable and are treated as completed scans.
+
 ## Exporting a diagnostic report
 
 Version 1.12 adds **Save TXT** and **Share** actions to each saved history entry. The text report includes the vehicle label, local date/time, adapter name, and the original one-time diagnostic summary. Saving uses Android's Storage Access Framework with `ACTION_CREATE_DOCUMENT`: the user chooses the destination in the system picker, and the app writes only to that selected URI. No broad storage permission is requested. The report can also be shared through Android's standard Sharesheet. Exported reports are plain text and should be treated as diagnostic notes, not as a certified workshop report.
 
 ## Known limitations and next step
 
-Version 1.9 performs a one-time PID capability query, reads RPM and coolant temperature when supported, and parses standard Mode 03 DTCs. The RFCOMM connection is released as soon as the one-time scan finishes. It does not continuously poll values, read freeze-frame data, retrieve manufacturer-specific enhanced codes, or clear faults. The built-in lookup covers only selected generic P0xxx codes. The next priority remains physical validation with a real ELM327 and the Elantra, followed by stronger connection tests and additional descriptions only when their standardized definitions can be verified.
+Version 1.13 stores categorized failed connection attempts as well as completed scans. Version 1.9 performs a one-time PID capability query, reads RPM and coolant temperature when supported, and parses standard Mode 03 DTCs. The RFCOMM connection is released as soon as the one-time scan finishes. It does not continuously poll values, read freeze-frame data, retrieve manufacturer-specific enhanced codes, or clear faults. The built-in lookup covers only selected generic P0xxx codes. The next priority remains physical validation with a real ELM327 and the Elantra, followed by stronger connection tests and additional descriptions only when their standardized definitions can be verified.
 
 CI can verify parser tests, compilation, and APK packaging, but only a physical ELM327 adapter and the Elantra can confirm the Bluetooth and ECU handshake end to end.
