@@ -6,6 +6,7 @@ import java.net.URLEncoder
 internal enum class Obd2DiagnosticStatus(val displayLabel: String) {
     COMPLETED("Проверка завершена"),
     ECU_NO_RESPONSE("ЭБУ не ответил"),
+    ECU_RESPONSE_UNCONFIRMED("Ответ ЭБУ не подтверждён"),
     ADAPTER_NO_RESPONSE("Адаптер не ответил"),
     INCOMPLETE_RESPONSE("Ответ неполный"),
     CONNECTION_FAILED("Ошибка подключения"),
