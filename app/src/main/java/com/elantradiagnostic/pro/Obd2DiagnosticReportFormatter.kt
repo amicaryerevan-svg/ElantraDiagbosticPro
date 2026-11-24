@@ -19,6 +19,7 @@ internal object Obd2DiagnosticReportFormatter {
             appendLine("Автомобиль: Hyundai Elantra 2021 SEL 2.0L")
             appendLine("Дата и время: $date")
             appendLine("Bluetooth-адаптер: ${entry.adapterName}")
+            appendLine("Статус попытки: ${entry.status.displayLabel}")
             appendLine()
             appendLine(entry.summary.trim())
             appendLine()
