@@ -22,7 +22,7 @@ internal class Obd2BluetoothClient : AutoCloseable {
 
     interface Listener {
         fun onConnected(deviceName: String, adapterInfo: String, ecuResponse: String, livePidResponses: Map<Int, String>, dtcResponse: String)
-        fun onFailure(message: String)
+        fun onFailure(status: Obd2DiagnosticStatus, message: String)
     }
 
     private val executor = Executors.newSingleThreadExecutor()
@@ -31,17 +31,19 @@ internal class Obd2BluetoothClient : AutoCloseable {
 
     fun connect(device: BluetoothDevice, listener: Listener) {
         executor.execute {
+            var stage = Obd2OperationStage.CONNECTION
             try {
                 val connectedSocket = device.createRfcommSocketToServiceRecord(SPP_UUID)
                 socket = connectedSocket
                 connectedSocket.connect()
+                stage = Obd2OperationStage.ADAPTER_INITIALIZATION
 
                 val input = connectedSocket.inputStream
                 val output = connectedSocket.outputStream
 
                 val adapterInfo = exchange(input, output, "ATZ", 6_000L)
                 if (adapterInfo.isBlank()) {
-                    throw IOException("ELM327 не ответил на команду сброса ATZ.")
+                    throw Elm327NoResponseException("ATZ")
                 }
 
                 val setupCommands = listOf("ATE0", "ATL0", "ATS0", "ATH0", "ATSP0")
@@ -53,6 +55,7 @@ internal class Obd2BluetoothClient : AutoCloseable {
                 }
 
                 // Mode 01 / PID 00 reads which standard live-data PIDs are supported.
+                stage = Obd2OperationStage.ECU_REQUEST
                 val ecuResponse = exchange(input, output, "0100", 12_000L)
                 val livePidResponses = linkedMapOf<Int, String>()
                 val supportedPids = Obd2ResponseParser.supportedPids(ecuResponse)
@@ -101,17 +104,17 @@ internal class Obd2BluetoothClient : AutoCloseable {
                         )
                     }
                 }
-            } catch (error: SecurityException) {
-                closeSocket()
-                if (!closed) {
-                    listener.onFailure("Нет разрешения Android Nearby devices (Bluetooth Connect).")
-                }
             } catch (error: Exception) {
                 closeSocket()
                 if (!closed) {
+                    val fallback = when (stage) {
+                        Obd2OperationStage.CONNECTION -> "Не удалось подключиться к Bluetooth OBD2 адаптеру."
+                        Obd2OperationStage.ADAPTER_INITIALIZATION -> "Не удалось выполнить инициализацию ELM327."
+                        Obd2OperationStage.ECU_REQUEST -> "Не удалось получить корректный ответ ЭБУ."
+                    }
                     listener.onFailure(
-                        error.message?.takeIf { it.isNotBlank() }
-                            ?: "Не удалось подключиться к Bluetooth OBD2 адаптеру."
+                        Obd2FailureClassifier.classify(stage, error),
+                        error.message?.takeIf { it.isNotBlank() } ?: fallback
                     )
                 }
             }
@@ -155,12 +158,9 @@ internal class Obd2BluetoothClient : AutoCloseable {
 
         val partial = response.content()
         if (partial.isEmpty()) {
-            throw IOException("Нет ответа от адаптера на команду $command.")
+            throw Elm327NoResponseException(command)
         }
-        throw IOException(
-            "Ответ на команду $command не завершён: адаптер не прислал приглашение '>'. " +
-                "Получено: ${partial.take(120)}"
-        )
+        throw Elm327IncompleteResponseException(command, partial)
     }
 
     private fun closeSocket() {
