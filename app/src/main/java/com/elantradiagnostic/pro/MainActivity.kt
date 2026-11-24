@@ -162,7 +162,7 @@ class MainActivity : Activity() {
         addButton(layout, "🎨  Оформление Sport / Neon") { showThemePicker() }
 
         addButton(layout, "ℹ️  О приложении") {
-            showInfo("Elantra Diagnostic Pro", "Версия 1.12\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
+            showInfo("Elantra Diagnostic Pro", "Версия 1.13\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
         }
 
         val footer = TextView(this).apply {
@@ -237,7 +237,7 @@ class MainActivity : Activity() {
 
         val formatter = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.getDefault())
         val labels = entries.map { entry ->
-            "${formatter.format(java.util.Date(entry.timestampMillis))} — ${entry.adapterName}"
+            "${entry.status.displayLabel} · ${formatter.format(java.util.Date(entry.timestampMillis))} — ${entry.adapterName}"
         }.toTypedArray()
 
         android.app.AlertDialog.Builder(this)
@@ -246,8 +246,8 @@ class MainActivity : Activity() {
                 val entry = entries[which]
                 val date = formatter.format(java.util.Date(entry.timestampMillis))
                 android.app.AlertDialog.Builder(this)
-                    .setTitle("Диагностика · $date")
-                    .setMessage("Адаптер: ${entry.adapterName}\n\n${entry.summary}")
+                    .setTitle("${entry.status.displayLabel} · $date")
+                    .setMessage("Статус: ${entry.status.displayLabel}\nАдаптер: ${entry.adapterName}\n\n${entry.summary}")
                     .setPositiveButton("Сохранить TXT") { _, _ ->
                         exportObd2Report(entry)
                     }
@@ -577,7 +577,12 @@ class MainActivity : Activity() {
                         Obd2DiagnosticHistoryEntry(
                             timestampMillis = System.currentTimeMillis(),
                             adapterName = deviceName,
-                            summary = message
+                            summary = message,
+                            status = if (ecuResponded) {
+                                Obd2DiagnosticStatus.COMPLETED
+                            } else {
+                                Obd2DiagnosticStatus.ECU_NO_RESPONSE
+                            }
                         )
                     )
                     if (obd2Client === client) obd2Client = null
@@ -590,15 +595,21 @@ class MainActivity : Activity() {
                 }
             }
 
-            override fun onFailure(message: String) {
+            override fun onFailure(status: Obd2DiagnosticStatus, message: String) {
                 runOnUiThread {
                     if (isFinishing || isDestroyed || obd2Client !== client) return@runOnUiThread
                     if (progress.isShowing) progress.dismiss()
                     obd2Client = null
-                    showInfo(
-                        "Не удалось подключить OBD2",
-                        "$message\n\nУбедись, что адаптер сопряжён с телефоном, не занят другим приложением и поддерживает Bluetooth Classic SPP."
+                    val detail = "$message\n\nУбедись, что адаптер сопряжён с телефоном, не занят другим приложением и поддерживает Bluetooth Classic SPP."
+                    saveObd2History(
+                        Obd2DiagnosticHistoryEntry(
+                            timestampMillis = System.currentTimeMillis(),
+                            adapterName = deviceName,
+                            summary = detail,
+                            status = status
+                        )
                     )
+                    showInfo(status.displayLabel, detail)
                 }
             }
         })
