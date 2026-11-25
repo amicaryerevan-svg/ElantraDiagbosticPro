@@ -89,6 +89,8 @@ Version 1.13 also stores failed attempts after the user selects an already-paire
 
 Cancelled attempts are not saved because the user intentionally stopped them. Failures that happen before an adapter is selected (for example, Bluetooth is off or there are no paired devices) are also not connection attempts and are not added. Existing version 1.12 three-field history records remain readable and are treated as completed scans.
 
+The OBD worker executor is shut down on both terminal outcomes: successful scans and failed attempts. This releases the per-attempt worker after an error instead of leaving an idle executor behind after the Activity has discarded the client. User cancellation still closes the socket and interrupts the worker immediately.
+
 ## Exporting a diagnostic report
 
 Version 1.12 adds **Save TXT** and **Share** actions to each saved history entry. The text report includes the vehicle label, local date/time, adapter name, and the original one-time diagnostic summary. Saving uses Android's Storage Access Framework with `ACTION_CREATE_DOCUMENT`: the user chooses the destination in the system picker, and the app writes only to that selected URI. No broad storage permission is requested. The report can also be shared through Android's standard Sharesheet. Exported reports are plain text and should be treated as diagnostic notes, not as a certified workshop report.
