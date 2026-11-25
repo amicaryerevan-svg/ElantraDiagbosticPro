@@ -106,6 +106,9 @@ internal class Obd2BluetoothClient : AutoCloseable {
                 }
             } catch (error: Exception) {
                 closeSocket()
+                // A failed attempt is terminal too. Do not leave the executor's worker
+                // alive and idle after the Activity drops its reference to this client.
+                executor.shutdown()
                 if (!closed) {
                     val fallback = when (stage) {
                         Obd2OperationStage.CONNECTION -> "Не удалось подключиться к Bluetooth OBD2 адаптеру."
