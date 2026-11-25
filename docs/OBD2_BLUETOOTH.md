@@ -83,7 +83,8 @@ Version 1.13 also stores failed attempts after the user selects an already-paire
 
 - **Connection failed** — the phone could not establish the Bluetooth Classic SPP socket.
 - **Adapter did not respond** — the socket connected, but ELM327 initialization did not receive a response.
-- **ECU did not respond** — the adapter initialized, but a standard ECU request received no bytes, or the PID 0100 response did not confirm a supported-PID bitmap.
+- **ECU did not respond** — the adapter initialized, but a standard ECU request received no bytes before timeout.
+- **ECU response unconfirmed** — the adapter returned a complete response, but it did not contain a valid `41 00` supported-PID bitmap. This is distinct from a no-byte timeout; Mode 03 is not requested.
 - **Incomplete response** — bytes arrived, but the ELM327 prompt (`>`) did not arrive before the timeout.
 - **Permission denied**, **adapter error**, or **ECU exchange error** — other explicitly categorized failures.
 
