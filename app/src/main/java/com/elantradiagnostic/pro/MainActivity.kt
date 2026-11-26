@@ -20,6 +20,9 @@ class MainActivity : Activity() {
         private const val REQUEST_OBD2_EXPORT = 4107
         private const val PENDING_OBD2_EXPORT_STATE = "pending_obd2_export_text"
         private const val OBD2_HISTORY_KEY = "obd2_history_v1"
+        private const val LAST_OBD2_DEVICE_ADDRESS_KEY = "obd2_last_device_address"
+        private const val LAST_OBD2_DEVICE_NAME_KEY = "obd2_last_device_name"
+        private const val PENDING_OBD2_RETRY_STATE = "pending_obd2_retry"
     }
 
     private var bg = Color.rgb(10, 16, 28)
@@ -27,6 +30,7 @@ class MainActivity : Activity() {
     private val white = Color.WHITE
     private var obd2Client: Obd2BluetoothClient? = null
     private var pendingObd2ExportText: String? = null
+    private var pendingObd2RetryAfterPermission = false
 
     private data class Symptom(val title: String, val causes: String, val checks: String, val urgency: String)
 
@@ -69,11 +73,13 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         bg = getSharedPreferences("elantra_data", MODE_PRIVATE).getInt("theme_bg", Color.rgb(10, 16, 28))
         pendingObd2ExportText = savedInstanceState?.getString(PENDING_OBD2_EXPORT_STATE)
+        pendingObd2RetryAfterPermission = savedInstanceState?.getBoolean(PENDING_OBD2_RETRY_STATE) ?: false
         showHome()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString(PENDING_OBD2_EXPORT_STATE, pendingObd2ExportText)
+        outState.putBoolean(PENDING_OBD2_RETRY_STATE, pendingObd2RetryAfterPermission)
         super.onSaveInstanceState(outState)
     }
 
@@ -134,6 +140,13 @@ class MainActivity : Activity() {
             startObd2Bluetooth()
         }
 
+        val lastAdapterName = prefs().getString(LAST_OBD2_DEVICE_NAME_KEY, null)
+        if (!prefs().getString(LAST_OBD2_DEVICE_ADDRESS_KEY, null).isNullOrBlank()) {
+            addButton(layout, "↻  Повторить подключение${"$"}{lastAdapterName?.let { \": ${"$"}it\" } ?: \"\"}") {
+                retryLastObd2Connection()
+            }
+        }
+
         addButton(layout, "📶  Подключение Wi-Fi") {
             showInfo("OBD2 Wi-Fi", "Для этого режима нужен совместимый Wi-Fi OBD2 адаптер. Подключение к Wi-Fi само по себе не считывает данные автомобиля.")
         }
@@ -162,7 +175,7 @@ class MainActivity : Activity() {
         addButton(layout, "🎨  Оформление Sport / Neon") { showThemePicker() }
 
         addButton(layout, "ℹ️  О приложении") {
-            showInfo("Elantra Diagnostic Pro", "Версия 1.14\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
+            showInfo("Elantra Diagnostic Pro", "Версия 1.15\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
         }
 
         val footer = TextView(this).apply {
@@ -470,7 +483,101 @@ class MainActivity : Activity() {
             .show()
     }
 
+
+    /**
+     * Retries only the adapter the user selected previously. No discovery or automatic
+     * reconnect is performed; the user must explicitly tap this action each time.
+     */
+    private fun retryLastObd2Connection() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingObd2RetryAfterPermission = true
+            requestPermissions(
+                arrayOf(Manifest.permission.BLUETOOTH_CONNECT),
+                REQUEST_OBD2_PERMISSION
+            )
+            return
+        }
+        pendingObd2RetryAfterPermission = false
+
+        val adapter = try {
+            android.bluetooth.BluetoothAdapter.getDefaultAdapter()
+        } catch (_: SecurityException) {
+            null
+        }
+        if (adapter == null) {
+            showInfo("Bluetooth недоступен", "Телефон не поддерживает Bluetooth.")
+            return
+        }
+
+        val enabled = try {
+            adapter.isEnabled
+        } catch (_: SecurityException) {
+            showInfo("Нет разрешения", "Разреши доступ к Bluetooth-устройствам поблизости.")
+            return
+        }
+        if (!enabled) {
+            android.app.AlertDialog.Builder(this)
+                .setTitle("Bluetooth выключен")
+                .setMessage("Включи Bluetooth в настройках телефона, затем снова нажми «Повторить подключение».")
+                .setNegativeButton("Отмена", null)
+                .setPositiveButton("Настройки Bluetooth") { _, _ ->
+                    try {
+                        startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+                    } catch (_: Exception) {
+                        showInfo("Bluetooth", "Не удалось открыть настройки Bluetooth.")
+                    }
+                }
+                .show()
+            return
+        }
+
+        val pairedDevices = try {
+            adapter.bondedDevices.toList()
+        } catch (_: SecurityException) {
+            showInfo("Нет разрешения", "Android не разрешил прочитать список уже сопряжённых Bluetooth-устройств.")
+            return
+        }
+        val lastAddress = prefs().getString(LAST_OBD2_DEVICE_ADDRESS_KEY, null)
+        val pairedAddresses = pairedDevices.mapNotNull { device ->
+            try { device.address } catch (_: SecurityException) { null }
+        }
+
+        if (!Obd2RetryPolicy.isAvailable(lastAddress, enabled, pairedAddresses)) {
+            android.app.AlertDialog.Builder(this)
+                .setTitle("Последний адаптер недоступен")
+                .setMessage("Сохранённый ELM327 больше не найден среди сопряжённых устройств. Выбери адаптер из списка или сначала выполни сопряжение в настройках Android.")
+                .setNegativeButton("Отмена", null)
+                .setPositiveButton("Выбрать адаптер") { _, _ -> showPairedObd2Devices() }
+                .show()
+            return
+        }
+
+        val targetAddress = Obd2RetryPolicy.normalizeAddress(lastAddress)
+        val target = pairedDevices.firstOrNull { device ->
+            val address = try { device.address } catch (_: SecurityException) { null }
+            Obd2RetryPolicy.normalizeAddress(address) == targetAddress
+        }
+        if (target == null) {
+            showPairedObd2Devices()
+            return
+        }
+        connectObd2Device(target)
+    }
+
     private fun connectObd2Device(device: android.bluetooth.BluetoothDevice) {
+        val selectedAddress = try { device.address } catch (_: SecurityException) { null }
+        if (selectedAddress.isNullOrBlank()) {
+            showInfo("Адаптер недоступен", "Не удалось прочитать адрес выбранного Bluetooth-устройства. Проверь разрешение «Устройства поблизости».")
+            return
+        }
+        val selectedName = try { device.name?.takeIf { it.isNotBlank() } ?: selectedAddress } catch (_: SecurityException) { selectedAddress }
+        prefs().edit()
+            .putString(LAST_OBD2_DEVICE_ADDRESS_KEY, selectedAddress)
+            .putString(LAST_OBD2_DEVICE_NAME_KEY, selectedName)
+            .apply()
+
         obd2Client?.close()
         val client = Obd2BluetoothClient()
         obd2Client = client
@@ -609,7 +716,12 @@ class MainActivity : Activity() {
                             status = status
                         )
                     )
-                    showInfo(status.displayLabel, detail)
+                    android.app.AlertDialog.Builder(this@MainActivity)
+                        .setTitle(status.displayLabel)
+                        .setMessage("$detail\\n\\nМожно повторить попытку с тем же сопряжённым адаптером. Автоматического переподключения нет.")
+                        .setPositiveButton("Повторить") { _, _ -> retryLastObd2Connection() }
+                        .setNegativeButton("Закрыть", null)
+                        .show()
                 }
             }
         })
@@ -742,8 +854,14 @@ class MainActivity : Activity() {
             }
         } else if (requestCode == REQUEST_OBD2_PERMISSION) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                showPairedObd2Devices()
+                if (pendingObd2RetryAfterPermission) {
+                    pendingObd2RetryAfterPermission = false
+                    retryLastObd2Connection()
+                } else {
+                    showPairedObd2Devices()
+                }
             } else {
+                pendingObd2RetryAfterPermission = false
                 showInfo(
                     "Bluetooth-разрешение не выдано",
                     "Для связи с уже сопряжённым ELM327 нужно разрешение «Устройства поблизости» (Bluetooth Connect). Без него приложение не может подключиться к адаптеру."
