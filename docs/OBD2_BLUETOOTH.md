@@ -101,3 +101,12 @@ Version 1.12 adds **Save TXT** and **Share** actions to each saved history entry
 Version 1.13 stores categorized failed connection attempts as well as completed scans. Version 1.9 performs a one-time PID capability query, reads RPM and coolant temperature when supported, and parses standard Mode 03 DTCs. The RFCOMM connection is released as soon as the one-time scan finishes. It does not continuously poll values, read freeze-frame data, retrieve manufacturer-specific enhanced codes, or clear faults. The built-in lookup covers only selected generic P0xxx codes. The next priority remains physical validation with a real ELM327 and the Elantra, followed by stronger connection tests and additional descriptions only when their standardized definitions can be verified.
 
 CI can verify parser tests, compilation, and APK packaging, but only a physical ELM327 adapter and the Elantra can confirm the Bluetooth and ECU handshake end to end.
+
+
+## Manual retry of the last paired adapter
+
+Version 1.15 remembers the address and display name of the last Bluetooth Classic adapter only after the user explicitly selects it from Android's already-paired device list. The home screen then offers **Repeat connection**, and a failed diagnostic attempt offers a **Retry** action.
+
+Every retry is user-initiated. Before reconnecting, the app checks the Android 12+ `BLUETOOTH_CONNECT` permission, verifies that Bluetooth is enabled, and confirms that the saved address still appears in the bonded-device list. If Bluetooth is off, the app opens system Bluetooth settings; the user must return and tap Retry again. If the adapter is no longer paired, the user can choose another already-paired device.
+
+The retry flow does not scan for nearby devices, pair devices, or reconnect automatically. The saved adapter address and name remain in the app's private local preferences and are not uploaded. The existing one-time, read-only OBD2 command sequence and automatic socket cleanup are unchanged.
