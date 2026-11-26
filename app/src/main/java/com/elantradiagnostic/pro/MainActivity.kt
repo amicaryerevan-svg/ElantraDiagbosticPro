@@ -142,9 +142,12 @@ class MainActivity : Activity() {
 
         val lastAdapterName = prefs().getString(LAST_OBD2_DEVICE_NAME_KEY, null)
         if (!prefs().getString(LAST_OBD2_DEVICE_ADDRESS_KEY, null).isNullOrBlank()) {
-            addButton(layout, "↻  Повторить подключение${"$"}{lastAdapterName?.let { \": ${"$"}it\" } ?: \"\"}") {
-                retryLastObd2Connection()
+            val retryLabel = if (lastAdapterName.isNullOrBlank()) {
+                "↻  Повторить подключение"
+            } else {
+                "↻  Повторить подключение: $lastAdapterName"
             }
+            addButton(layout, retryLabel) { retryLastObd2Connection() }
         }
 
         addButton(layout, "📶  Подключение Wi-Fi") {
@@ -718,7 +721,7 @@ class MainActivity : Activity() {
                     )
                     android.app.AlertDialog.Builder(this@MainActivity)
                         .setTitle(status.displayLabel)
-                        .setMessage("$detail\\n\\nМожно повторить попытку с тем же сопряжённым адаптером. Автоматического переподключения нет.")
+                        .setMessage("$detail\n\nМожно повторить попытку с тем же сопряжённым адаптером. Автоматического переподключения нет.")
                         .setPositiveButton("Повторить") { _, _ -> retryLastObd2Connection() }
                         .setNegativeButton("Закрыть", null)
                         .show()
