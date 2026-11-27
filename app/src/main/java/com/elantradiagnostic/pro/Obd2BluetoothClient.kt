@@ -41,8 +41,8 @@ internal class Obd2BluetoothClient : AutoCloseable {
                 val input = connectedSocket.inputStream
                 val output = connectedSocket.outputStream
 
-                val adapterInfo = exchange(input, output, "ATZ", 6_000L)
-                if (adapterInfo.isBlank()) {
+                val resetBanner = exchange(input, output, "ATZ", 6_000L)
+                if (resetBanner.isBlank()) {
                     throw Elm327NoResponseException("ATZ")
                 }
 
@@ -83,6 +83,21 @@ internal class Obd2BluetoothClient : AutoCloseable {
                 } else {
                     "Не запрашивался: корректный ответ PID 0100 не получен."
                 }
+
+                // Adapter metadata is optional and collected only after all required
+                // diagnostic requests. If a clone does not answer, the completed scan
+                // remains valid; no further command is sent after an incomplete reply.
+                val atiResponse = exchangeOptionalMetadata(input, output, "ATI", 2_000L)
+                val protocolResponse = if (atiResponse != null) {
+                    exchangeOptionalMetadata(input, output, "ATDP", 2_000L)
+                } else {
+                    null
+                }
+                val adapterInfo = Elm327AdapterInfoParser.format(
+                    resetBanner,
+                    atiResponse,
+                    protocolResponse
+                )
 
                 if (!closed) {
                     val resultDeviceName =
@@ -164,6 +179,25 @@ internal class Obd2BluetoothClient : AutoCloseable {
             throw Elm327NoResponseException(command)
         }
         throw Elm327IncompleteResponseException(command, partial)
+    }
+
+    /**
+     * Reads optional adapter metadata after the required OBD transaction. A timeout or
+     * unsupported command only omits metadata; it must not turn a completed scan into
+     * a failed scan. No further command is sent after an incomplete optional response.
+     */
+    private fun exchangeOptionalMetadata(
+        input: InputStream,
+        output: OutputStream,
+        command: String,
+        timeoutMs: Long
+    ): String? {
+        return try {
+            exchange(input, output, command, timeoutMs)
+        } catch (error: IOException) {
+            if (closed || Thread.currentThread().isInterrupted) throw error
+            null
+        }
     }
 
     private fun closeSocket() {
