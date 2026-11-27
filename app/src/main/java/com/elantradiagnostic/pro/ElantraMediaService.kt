@@ -29,6 +29,24 @@ class ElantraMediaService : MediaLibraryService() {
     private var librarySession: MediaLibrarySession? = null
 
     private val libraryCallback = object : MediaLibrarySession.Callback {
+        override fun onAddMediaItems(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: List<MediaItem>
+        ): ListenableFuture<List<MediaItem>> {
+            // Legacy MediaBrowser clients (including Android Auto integrations) can
+            // request playback by mediaId without carrying the original content URI.
+            // Resolve those IDs against the current MediaStore library before ExoPlayer
+            // receives the playlist. Removed files and unknown IDs are not playable.
+            val availableItems = queryLocalAudio().associateBy { it.mediaId }
+            val resolvedIds = MediaLibraryItemResolver.resolveIds(
+                mediaItems.map { it.mediaId },
+                availableItems.keys
+            )
+            val resolvedItems = resolvedIds.mapNotNull(availableItems::get)
+            return Futures.immediateFuture(resolvedItems)
+        }
+
         override fun onGetLibraryRoot(
             session: MediaLibrarySession,
             browser: MediaSession.ControllerInfo,
