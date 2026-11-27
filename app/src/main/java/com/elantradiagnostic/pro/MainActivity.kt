@@ -178,7 +178,7 @@ class MainActivity : Activity() {
         addButton(layout, "🎨  Оформление Sport / Neon") { showThemePicker() }
 
         addButton(layout, "ℹ️  О приложении") {
-            showInfo("Elantra Diagnostic Pro", "Версия 1.16\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
+            showInfo("Elantra Diagnostic Pro", "Версия 1.17\nHyundai Elantra 2021 SEL 2.0L\n\nРежим без OBD2 помогает оценить возможные причины симптомов, но не считывает данные ЭБУ.")
         }
 
         val footer = TextView(this).apply {
