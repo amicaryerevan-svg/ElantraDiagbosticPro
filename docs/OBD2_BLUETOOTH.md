@@ -110,3 +110,15 @@ Version 1.15 remembers the address and display name of the last Bluetooth Classi
 Every retry is user-initiated. Before reconnecting, the app checks the Android 12+ `BLUETOOTH_CONNECT` permission, verifies that Bluetooth is enabled, and confirms that the saved address still appears in the bonded-device list. If Bluetooth is off, the app opens system Bluetooth settings; the user must return and tap Retry again. If the adapter is no longer paired, the user can choose another already-paired device.
 
 The retry flow does not scan for nearby devices, pair devices, or reconnect automatically. The saved adapter address and name remain in the app's private local preferences and are not uploaded. The existing one-time, read-only OBD2 command sequence and automatic socket cleanup are unchanged.
+
+## Adapter identification and selected OBD protocol
+
+Version 1.16 collects optional adapter metadata after the required read-only diagnostic requests:
+
+- `ATZ` supplies the reset banner.
+- `ATI` asks the adapter to report its identifier/version string.
+- `ATDP` asks the adapter to describe the currently selected OBD protocol after the ECU request.
+
+The app prefers a usable `ATI` response and falls back to the `ATZ` banner. It displays the `ATDP` description separately. Unsupported commands, missing replies, or unrecognized strings are shown as unavailable metadata; they do not invalidate a diagnostic snapshot that has already completed. If an optional command returns an incomplete response, the app closes the connection without sending another command.
+
+These strings are self-reported by the adapter. A clone can imitate an ELM327 version string, so `ATI`/ `ATZ` cannot authenticate the chip or prove that every command is implemented correctly. Likewise, `ATDP` reports the adapter's selected protocol; the separate valid `41 00` response is still the evidence that the ECU answered the supported-PID query. Physical validation with the vehicle remains necessary.
