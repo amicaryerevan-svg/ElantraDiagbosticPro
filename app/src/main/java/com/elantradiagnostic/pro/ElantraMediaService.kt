@@ -17,6 +17,7 @@ import androidx.media3.session.MediaSession
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import java.util.Locale
 
 /**
  * Exposes the phone's locally stored music to Android Auto.
@@ -52,18 +53,7 @@ class ElantraMediaService : MediaLibraryService() {
             browser: MediaSession.ControllerInfo,
             params: LibraryParams?
         ): ListenableFuture<LibraryResult<MediaItem>> {
-            val root = MediaItem.Builder()
-                .setMediaId(ROOT_ID)
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle("Elantra Diagnostic Pro")
-                        .setSubtitle("Музыка на телефоне")
-                        .setIsBrowsable(true)
-                        .setIsPlayable(false)
-                        .build()
-                )
-                .build()
-            return Futures.immediateFuture(LibraryResult.ofItem(root, params))
+            return Futures.immediateFuture(LibraryResult.ofItem(rootItem(), params))
         }
 
         override fun onGetChildren(
@@ -74,19 +64,44 @@ class ElantraMediaService : MediaLibraryService() {
             pageSize: Int,
             params: LibraryParams?
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
-            if (parentId != ROOT_ID) {
-                return Futures.immediateFuture(
-                    LibraryResult.ofItemList(ImmutableList.of(), params)
+            val children: List<MediaItem> = when (parentId) {
+                MediaLibraryBrowseIds.ROOT -> listOf(
+                    categoryItem(
+                        MediaLibraryBrowseIds.ALL_TRACKS,
+                        "Все композиции",
+                        "Вся музыка, сохранённая на телефоне"
+                    ),
+                    categoryItem(
+                        MediaLibraryBrowseIds.ARTISTS,
+                        "Исполнители",
+                        "Музыка по исполнителям"
+                    )
                 )
+
+                MediaLibraryBrowseIds.ALL_TRACKS -> queryLocalAudio()
+
+                MediaLibraryBrowseIds.ARTISTS -> artistFolders(queryLocalAudio())
+
+                else -> {
+                    val artist = MediaLibraryBrowseIds.artistName(parentId)
+                    if (artist == null) {
+                        emptyList()
+                    } else {
+                        queryLocalAudio().filter { trackArtist(it).equals(artist, ignoreCase = true) }
+                    }
+                }
             }
 
-            val tracks = queryLocalAudio()
-            // Be defensive about invalid or unusually large paging values from a browser.
+            // Media3 supplies pageSize > 0. Keep defensive bounds for unusual legacy clients.
             val safePage = page.coerceAtLeast(0).toLong()
-            val safePageSize = pageSize.coerceAtLeast(0).toLong()
-            val start = (safePage * safePageSize).coerceAtMost(tracks.size.toLong()).toInt()
-            val end = (start.toLong() + safePageSize).coerceAtMost(tracks.size.toLong()).toInt()
-            val pageItems = ImmutableList.copyOf(tracks.subList(start, end))
+            val safePageSize = pageSize.coerceAtLeast(1).toLong()
+            val start = (safePage * safePageSize)
+                .coerceAtMost(children.size.toLong())
+                .toInt()
+            val end = (start.toLong() + safePageSize)
+                .coerceAtMost(children.size.toLong())
+                .toInt()
+            val pageItems = ImmutableList.copyOf(children.subList(start, end))
             return Futures.immediateFuture(LibraryResult.ofItemList(pageItems, params))
         }
 
@@ -95,7 +110,33 @@ class ElantraMediaService : MediaLibraryService() {
             browser: MediaSession.ControllerInfo,
             mediaId: String
         ): ListenableFuture<LibraryResult<MediaItem>> {
-            val item = queryLocalAudio().firstOrNull { it.mediaId == mediaId }
+            val item = when (mediaId) {
+                MediaLibraryBrowseIds.ROOT -> rootItem()
+                MediaLibraryBrowseIds.ALL_TRACKS -> categoryItem(
+                    MediaLibraryBrowseIds.ALL_TRACKS,
+                    "Все композиции",
+                    "Вся музыка, сохранённая на телефоне"
+                )
+                MediaLibraryBrowseIds.ARTISTS -> categoryItem(
+                    MediaLibraryBrowseIds.ARTISTS,
+                    "Исполнители",
+                    "Музыка по исполнителям"
+                )
+                else -> {
+                    val tracks = queryLocalAudio()
+                    val artist = MediaLibraryBrowseIds.artistName(mediaId)
+                    if (artist != null) {
+                        if (tracks.any { trackArtist(it).equals(artist, ignoreCase = true) }) {
+                            artistFolderItem(artist)
+                        } else {
+                            null
+                        }
+                    } else {
+                        tracks.firstOrNull { it.mediaId == mediaId }
+                    }
+                }
+            }
+
             return if (item != null) {
                 Futures.immediateFuture(LibraryResult.ofItem(item, null))
             } else {
@@ -122,6 +163,61 @@ class ElantraMediaService : MediaLibraryService() {
         librarySession = null
         super.onDestroy()
     }
+
+    private fun rootItem(): MediaItem =
+        MediaItem.Builder()
+            .setMediaId(MediaLibraryBrowseIds.ROOT)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle("Elantra Diagnostic Pro")
+                    .setSubtitle("Музыка на телефоне")
+                    .setIsBrowsable(true)
+                    .setIsPlayable(false)
+                    .build()
+            )
+            .build()
+
+    private fun categoryItem(mediaId: String, title: String, subtitle: String): MediaItem =
+        MediaItem.Builder()
+            .setMediaId(mediaId)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(title)
+                    .setSubtitle(subtitle)
+                    .setIsBrowsable(true)
+                    .setIsPlayable(false)
+                    .build()
+            )
+            .build()
+
+    private fun artistFolderItem(artist: String): MediaItem =
+        MediaItem.Builder()
+            .setMediaId(MediaLibraryBrowseIds.artistId(artist))
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(artist)
+                    .setArtist(artist)
+                    .setSubtitle("Композиции исполнителя")
+                    .setIsBrowsable(true)
+                    .setIsPlayable(false)
+                    .build()
+            )
+            .build()
+
+    private fun artistFolders(tracks: List<MediaItem>): List<MediaItem> {
+        return tracks
+            .map(::trackArtist)
+            .distinctBy { it.lowercase(Locale.ROOT) }
+            .sortedWith(String.CASE_INSENSITIVE_ORDER)
+            .map(::artistFolderItem)
+    }
+
+    private fun trackArtist(item: MediaItem): String =
+        item.mediaMetadata.artist
+            ?.toString()
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: UNKNOWN_ARTIST
 
     private fun hasAudioPermission(): Boolean {
         val permission = if (Build.VERSION.SDK_INT >= 33) {
@@ -165,7 +261,7 @@ class ElantraMediaService : MediaLibraryService() {
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idColumn)
                     val title = cursor.getString(titleColumn) ?: "Без названия"
-                    val artist = cursor.getString(artistColumn) ?: "Неизвестный исполнитель"
+                    val artist = cursor.getString(artistColumn) ?: UNKNOWN_ARTIST
                     val mimeType = cursor.getString(mimeColumn)
                     val uri: Uri = ContentUris.withAppendedId(collection, id)
 
@@ -199,6 +295,6 @@ class ElantraMediaService : MediaLibraryService() {
 
     companion object {
         private const val TAG = "ElantraMediaService"
-        private const val ROOT_ID = "elantra_local_music"
+        private const val UNKNOWN_ARTIST = "Неизвестный исполнитель"
     }
 }

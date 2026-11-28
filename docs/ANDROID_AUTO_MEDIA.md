@@ -2,15 +2,20 @@
 
 ## Local audio library
 
-The app exposes local music through Media3 `MediaLibraryService` and `MediaLibrarySession`. Android Auto renders its own driver-optimized browsing and playback interface; the phone Activity is not projected onto the car display.
+The app exposes phone-stored music through Media3 `MediaLibraryService` and `MediaLibrarySession`. Android Auto renders its own driver-optimized browsing and playback interface; the phone Activity is not projected onto the car display.
 
-Version 1.17 adds `onAddMediaItems` resolution for legacy MediaBrowser playback requests. Some clients select a browsed track by `mediaId` without carrying the original MediaStore URI. The service now resolves requested IDs against the current local MediaStore library and returns the canonical playable `MediaItem` with its content URI. Unknown IDs and files that have been removed are omitted instead of being passed to ExoPlayer as unplayable entries.
+Version 1.18 organizes the local library into two root folders:
 
-The service still requires the user to grant the Android audio-library permission. If permission is revoked or a file is removed, the library may be empty or a previously browsed item may no longer play. Reopen or refresh the media library after granting permission.
+- **Все композиции** — the existing flat, title-sorted list of local audio files.
+- **Исполнители** — a case-insensitively sorted list of artist folders. Opening an artist shows only that artist's available tracks.
+
+Artist folder IDs are URL-encoded and stable for the artist name, including names containing spaces, punctuation or non-Latin characters. Missing or revoked audio permission returns an empty library instead of crashing the service. The existing `onAddMediaItems` resolver still checks playback requests against current MediaStore items, so folder IDs, unknown IDs and removed files are not sent to ExoPlayer as tracks.
+
+The service requires the user to grant Android's audio-library permission. If permission is revoked or a file is removed, the library may be empty or a previously browsed item may no longer play.
 
 ## YouTube Music
 
-Elantra Diagnostic Pro does not extract, proxy, or control YouTube Music streams. Use the official YouTube Music app and its own Android Auto integration for that service. This project only exposes music files stored on the phone.
+Elantra Diagnostic Pro does not extract, proxy, or stream YouTube content. Use the official YouTube Music app and its own Android Auto integration for that service. This project only exposes music files stored on the phone.
 
 ## Safety and platform limits
 

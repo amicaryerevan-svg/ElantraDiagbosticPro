@@ -1,4 +1,3 @@
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -12,8 +11,8 @@ android {
         applicationId = "com.elantradiagnostic.pro"
         minSdk = 23
         targetSdk = 35
-        versionCode = 18
-        versionName = "1.17"
+        versionCode = 19
+        versionName = "1.18"
     }
 
     compileOptions {
